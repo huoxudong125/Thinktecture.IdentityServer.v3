@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+using IdentityModel;
+using IdentityServer3.Core.Logging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
-using Thinktecture.IdentityModel;
 
-namespace Thinktecture.IdentityServer.Core.Extensions
+namespace IdentityServer3.Core.Extensions
 {
-    public static class ClaimListExtensions
+    internal static class ClaimListExtensions
     {
+        private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
+
         public static Dictionary<string, object> ToClaimsDictionary(this IEnumerable<Claim> claims)
         {
             var d = new Dictionary<string, object>();
@@ -37,7 +42,7 @@ namespace Thinktecture.IdentityServer.Core.Extensions
             {
                 if (!d.ContainsKey(claim.Type))
                 {
-                    d.Add(claim.Type, claim.Value);
+                    d.Add(claim.Type, GetValue(claim));
                 }
                 else
                 {
@@ -46,17 +51,50 @@ namespace Thinktecture.IdentityServer.Core.Extensions
                     var list = value as List<object>;
                     if (list != null)
                     {
-                        list.Add(claim.Value);
+                        list.Add(GetValue(claim));
                     }
                     else
                     {
                         d.Remove(claim.Type);
-                        d.Add(claim.Type, new List<object> { value, claim.Value });
+                        d.Add(claim.Type, new List<object> { value, GetValue(claim) });
                     }
                 }
             }
 
             return d;
+        }
+
+        private static object GetValue(Claim claim)
+        {
+            if (claim.ValueType == ClaimValueTypes.Integer ||
+                claim.ValueType == ClaimValueTypes.Integer32)
+            {
+                Int32 value;
+                if (Int32.TryParse(claim.Value, out value))
+                {
+                    return value;
+                }
+            }
+
+            if (claim.ValueType == ClaimValueTypes.Integer64)
+            {
+                Int64 value;
+                if (Int64.TryParse(claim.Value, out value))
+                {
+                    return value;
+                }
+            }
+
+            if (claim.ValueType == ClaimValueTypes.Boolean)
+            {
+                bool value;
+                if (bool.TryParse(claim.Value, out value))
+                {
+                    return value;
+                }
+            }
+
+            return claim.Value;
         }
     }
 }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-using System;
+using IdentityModel;
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Models;
+using System.Security.Claims;
 using System.Threading.Tasks;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.Models;
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+namespace IdentityServer3.Core.Services.Default
 {
     /// <summary>
     /// Default refresh token service
@@ -30,7 +31,7 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         /// <summary>
         /// The logger
         /// </summary>
-        protected readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
+        private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
 
         /// <summary>
         /// The refresh token store
@@ -38,23 +39,31 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         protected readonly IRefreshTokenStore _store;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="DefaultRefreshTokenService"/> class.
+        /// The _events
+        /// </summary>
+        protected readonly IEventService _events;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DefaultRefreshTokenService" /> class.
         /// </summary>
         /// <param name="store">The refresh token store.</param>
-        public DefaultRefreshTokenService(IRefreshTokenStore store)
+        /// <param name="events">The events.</param>
+        public DefaultRefreshTokenService(IRefreshTokenStore store, IEventService events)
         {
             _store = store;
+            _events = events;
         }
 
         /// <summary>
         /// Creates the refresh token.
         /// </summary>
+        /// <param name="subject">The subject.</param>
         /// <param name="accessToken">The access token.</param>
         /// <param name="client">The client.</param>
         /// <returns>
         /// The refresh token handle
         /// </returns>
-        public async Task<string> CreateRefreshTokenAsync(Token accessToken, Client client)
+        public virtual async Task<string> CreateRefreshTokenAsync(ClaimsPrincipal subject, Token accessToken, Client client)
         {
             Logger.Debug("Creating refresh token");
 
@@ -70,16 +79,18 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
                 lifetime = client.SlidingRefreshTokenLifetime;
             }
 
-            var handle = Guid.NewGuid().ToString("N");
+            var handle = CryptoRandom.CreateUniqueId();
             var refreshToken = new RefreshToken
             {
-                ClientId = client.ClientId,
-                CreationTime = DateTime.UtcNow,
+                CreationTime = DateTimeOffsetHelper.UtcNow,
                 LifeTime = lifetime,
-                AccessToken = accessToken
+                AccessToken = accessToken,
+                Subject = subject
             };
 
             await _store.StoreAsync(handle, refreshToken);
+
+            await RaiseRefreshTokenIssuedEventAsync(handle, refreshToken);
             return handle;
         }
 
@@ -92,7 +103,7 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         /// <returns>
         /// The refresh token handle
         /// </returns>
-        public async Task<string> UpdateRefreshTokenAsync(string handle, RefreshToken refreshToken, Client client)
+        public virtual async Task<string> UpdateRefreshTokenAsync(string handle, RefreshToken refreshToken, Client client)
         {
             Logger.Debug("Updating refresh token");
 
@@ -102,7 +113,11 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
             {
                 Logger.Debug("Token usage is one-time only. Generating new handle");
 
-                // generate new handle
+                // delete old one
+                await _store.RemoveAsync(handle);
+
+                // create new one
+                handle = CryptoRandom.CreateUniqueId();
                 needsUpdate = true;
             }
 
@@ -130,19 +145,39 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
 
             if (needsUpdate)
             {
-                // delete old one
-                await _store.RemoveAsync(handle);
-
-                // create new one
-                string newHandle = Guid.NewGuid().ToString("N");
-                await _store.StoreAsync(newHandle, refreshToken);
-
+                await _store.StoreAsync(handle, refreshToken);
                 Logger.Debug("Updated refresh token in store");
-                return newHandle;
+            }
+            else
+            {
+                Logger.Debug("No updates to refresh token done");
             }
 
+            await RaiseRefreshTokenRefreshedEventAsync(handle, handle, refreshToken);
             Logger.Debug("No updates to refresh token done");
+
             return handle;
+        }
+
+        /// <summary>
+        /// Raises the refresh token issued event.
+        /// </summary>
+        /// <param name="handle">The handle.</param>
+        /// <param name="token">The token.</param>
+        protected async Task RaiseRefreshTokenIssuedEventAsync(string handle, RefreshToken token)
+        {
+            await _events.RaiseRefreshTokenIssuedEventAsync(handle, token);
+        }
+
+        /// <summary>
+        /// Raises the refresh token refreshed event.
+        /// </summary>
+        /// <param name="oldHandle">The old handle.</param>
+        /// <param name="newHandle">The new handle.</param>
+        /// <param name="token">The token.</param>
+        protected async Task RaiseRefreshTokenRefreshedEventAsync(string oldHandle, string newHandle, RefreshToken token)
+        {
+            await _events.RaiseSuccessfulRefreshTokenRefreshEventAsync(oldHandle, newHandle, token);
         }
     }
 }

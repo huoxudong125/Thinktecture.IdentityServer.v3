@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Models;
 using Newtonsoft.Json;
 using System.Net;
 using System.Net.Http;
@@ -21,14 +23,17 @@ using System.Net.Http.Formatting;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.Models;
 
-namespace Thinktecture.IdentityServer.Core.Results
+namespace IdentityServer3.Core.Results
 {
-    public class TokenResult : IHttpActionResult
+    internal class TokenResult : IHttpActionResult
     {
         private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
+        private readonly static JsonMediaTypeFormatter Formatter = new JsonMediaTypeFormatter
+        {
+            SerializerSettings = { DefaultValueHandling = DefaultValueHandling.Ignore }
+        };
+        
         private readonly TokenResponse _response;
 
         public TokenResult(TokenResponse response)
@@ -52,14 +57,9 @@ namespace Thinktecture.IdentityServer.Core.Results
                 token_type = Constants.TokenTypes.Bearer
             };
 
-            var formatter = new JsonMediaTypeFormatter
-            {
-                SerializerSettings = {DefaultValueHandling = DefaultValueHandling.Ignore}
-            };
-
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new ObjectContent<TokenResponseDto>(dto, formatter)
+                Content = new ObjectContent<TokenResponseDto>(dto, Formatter)
             };
 
             Logger.Info("Returning token response.");

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,39 +14,42 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Logging;
 using Owin;
 using System;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
-using Thinktecture.IdentityServer.Core.Extensions;
 
-namespace Thinktecture.IdentityServer.Core.Configuration
+namespace IdentityServer3.Core.Configuration
 {
     /// <summary>
     /// The IdentityServerOptions class is the top level container for all configuration settings of IdentityServer.
     /// </summary>
     public class IdentityServerOptions
     {
+        static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
+
         /// <summary>
         /// Initializes a new instance of the <see cref="IdentityServerOptions"/> class with default values.
         /// </summary>
         public IdentityServerOptions()
         {
             SiteName = Constants.IdentityServerName;
+
             this.ProtocolLogoutUrls = new List<string>();
             this.RequireSsl = true;
-            this.Endpoints = new Endpoints();
-            this.CorsPolicy = new CorsPolicy();
+            this.Endpoints = new EndpointOptions();
             this.AuthenticationOptions = new AuthenticationOptions();
             this.CspOptions = new CspOptions();
+            this.LoggingOptions = new LoggingOptions();
+            this.EventsOptions = new EventsOptions();
+            this.EnableWelcomePage = true;
+            this.InputLengthRestrictions = new InputLengthRestrictions();
+            this.DiscoveryOptions = new DiscoveryOptions();
         }
 
         internal void Validate()
-        {
-            if (IssuerUri.IsMissing())
-            {
-                throw new ArgumentException("IssuerUri Is Missing");
-            }
+        {            
             if (AuthenticationOptions == null)
             {
                 throw new ArgumentException("AuthenticationOptions is missing");
@@ -77,6 +80,12 @@ namespace Thinktecture.IdentityServer.Core.Configuration
         /// </value>
         public string IssuerUri { get; set; }
 
+        // todo: remove in 3.0.0
+        // added as a temporary measure since we need someplace to hold the calculated 
+        // IssuerUri from the first request for the scenarios where the newer GetIdentityServerIssuerUri
+        // extension method is not being used
+        internal string DynamicallyCalculatedIssuerUri { get; set; }
+
         /// <summary>
         /// Gets or sets the X.509 certificate (and corresponding private key) for signing security tokens.
         /// </summary>
@@ -102,12 +111,12 @@ namespace Thinktecture.IdentityServer.Core.Configuration
         public bool RequireSsl { get; set; }
 
         /// <summary>
-        /// Gets or sets the name of the public host.
+        /// Gets or sets the public origin for IdentityServer (e.g. "https://yourserver:1234").
         /// </summary>
         /// <value>
-        /// The name of the public host.
+        /// The name of the public origin.
         /// </value>
-        public string PublicHostName { get; set; }
+        public string PublicOrigin { get; set; }
 
         /// <summary>
         /// Gets or sets the identity server factory.
@@ -131,7 +140,15 @@ namespace Thinktecture.IdentityServer.Core.Configuration
         /// <value>
         /// The endpoints configuration.
         /// </value>
-        public Endpoints Endpoints { get; set; }
+        public EndpointOptions Endpoints { get; set; }
+
+        /// <summary>
+        /// Gets or sets the discovery endpoint configuration.
+        /// </summary>
+        /// <value>
+        /// The discovery endpoint configuration.
+        /// </value>
+        public DiscoveryOptions DiscoveryOptions { get; set; }
 
         /// <summary>
         /// Gets or sets the authentication options.
@@ -150,14 +167,6 @@ namespace Thinktecture.IdentityServer.Core.Configuration
         public Action<IAppBuilder, IdentityServerOptions> PluginConfiguration { get; set; }
 
         /// <summary>
-        /// Gets or sets the CORS policy.
-        /// </summary>
-        /// <value>
-        /// The CORS policy.
-        /// </value>
-        public CorsPolicy CorsPolicy { get; set; }
-
-        /// <summary>
         /// Gets or sets the protocol logout urls.
         /// </summary>
         /// <value>
@@ -173,6 +182,38 @@ namespace Thinktecture.IdentityServer.Core.Configuration
         /// </value>
         public CspOptions CspOptions { get; set; }
 
+        /// <summary>
+        /// Gets or sets the diagnostics options.
+        /// </summary>
+        /// <value>
+        /// The diagnostics options.
+        /// </value>
+        public LoggingOptions LoggingOptions { get; set; }
+
+        /// <summary>
+        /// Gets or sets the events options.
+        /// </summary>
+        /// <value>
+        /// The events options.
+        /// </value>
+        public EventsOptions EventsOptions { get; set; }
+
+        /// <summary>
+        /// Gets or sets the max input length restrictions.
+        /// </summary>
+        /// <value>
+        /// The length restrictions.
+        /// </value>
+        public InputLengthRestrictions InputLengthRestrictions { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the welcome page is enabled.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if the welcome page is enabled; otherwise, <c>false</c>.
+        /// </value>
+        public bool EnableWelcomePage { get; set; }
+        
         internal IEnumerable<X509Certificate2> PublicKeysForMetadata
         {
             get

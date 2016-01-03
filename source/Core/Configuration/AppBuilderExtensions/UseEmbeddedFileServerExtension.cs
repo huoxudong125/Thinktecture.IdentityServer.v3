@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core;
+using IdentityServer3.Core.Services.Default;
 using Microsoft.Owin;
 using Microsoft.Owin.Extensions;
 using Microsoft.Owin.FileSystems;
 using Microsoft.Owin.StaticFiles;
-using Thinktecture.IdentityServer.Core;
-using Thinktecture.IdentityServer.Core.Services.Default;
 
 namespace Owin
 {
@@ -30,7 +30,7 @@ namespace Owin
             app.UseFileServer(new FileServerOptions
             {
                 RequestPath = new PathString("/assets"),
-                FileSystem = new EmbeddedResourceFileSystem(typeof(Constants).Assembly, AssetManager.PageAssetsNamespace)
+                FileSystem = new EmbeddedResourceFileSystem(typeof(Constants).Assembly, AssetManager.HttpAssetsNamespace)
             });
             app.UseStageMarker(PipelineStage.MapHandler);
 

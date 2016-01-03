@@ -13,13 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-using System.Linq;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Models;
-using Thinktecture.IdentityServer.Core.Validation;
 
-namespace Thinktecture.IdentityServer.Core.ResponseHandling
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Models;
+using IdentityServer3.Core.Validation;
+using System.ComponentModel;
+using System.Linq;
+
+#pragma warning disable 1591
+
+namespace IdentityServer3.Core.ResponseHandling
 {
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public class EndSessionResponseGenerator
     {
         public SignOutMessage CreateSignoutMessage(ValidatedEndSessionRequest request)
@@ -32,13 +37,13 @@ namespace Thinktecture.IdentityServer.Core.ResponseHandling
 
                 if (request.PostLogOutUri != null)
                 {
-                    message.ReturnUrl = request.PostLogOutUri.AbsoluteUri;
+                    message.ReturnUrl = request.PostLogOutUri;
                 }
                 else
                 {
                     if (request.Client.PostLogoutRedirectUris.Any())
                     {
-                        message.ReturnUrl = request.Client.PostLogoutRedirectUris.First().AbsoluteUri;
+                        message.ReturnUrl = request.Client.PostLogoutRedirectUris.First();
                     }
                 }
 

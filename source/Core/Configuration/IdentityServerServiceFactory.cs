@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Services;
+using IdentityServer3.Core.Services.Default;
+using IdentityServer3.Core.Validation;
 using System;
 using System.Collections.Generic;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.Services;
-using Thinktecture.IdentityServer.Core.Services.Default;
 
-namespace Thinktecture.IdentityServer.Core.Configuration
+namespace IdentityServer3.Core.Configuration
 {
     /// <summary>
     /// Use this class to replace built-in services, or add additional dependencies to the container
@@ -35,7 +36,7 @@ namespace Thinktecture.IdentityServer.Core.Configuration
         /// </summary>
         static IdentityServerServiceFactory()
         {
-            DefaultClaimsFilter = Registration.RegisterFactory<IExternalClaimsFilter>(() =>
+            DefaultClaimsFilter = new Registration<IExternalClaimsFilter>(resolver =>
             {
                 var aggregateFilter = new AggregateExternalClaimsFilter(
                     new NormalizingClaimsFilter(),
@@ -58,6 +59,23 @@ namespace Thinktecture.IdentityServer.Core.Configuration
         public IdentityServerServiceFactory()
         {
             this.ExternalClaimsFilter = DefaultClaimsFilter;
+
+            CustomGrantValidators = new List<Registration<ICustomGrantValidator>>();
+
+            // register default secret parsers
+            SecretParsers = new List<Registration<ISecretParser>>
+            {
+                new Registration<ISecretParser, BasicAuthenticationSecretParser>(),
+                new Registration<ISecretParser, PostBodySecretParser>(),
+                new Registration<ISecretParser, X509CertificateSecretParser>()
+            };
+
+            // register default secret validators
+            SecretValidators = new List<Registration<ISecretValidator>>
+            {
+                new Registration<ISecretValidator, HashedSharedSecretValidator>(),
+                new Registration<ISecretValidator, X509CertificateThumbprintSecretValidator>()
+            };
         }
 
         /// <summary>
@@ -183,7 +201,7 @@ namespace Thinktecture.IdentityServer.Core.Configuration
         /// <value>
         /// The custom grant validator.
         /// </value>
-        public Registration<ICustomGrantValidator> CustomGrantValidator { get; set; }
+        public List<Registration<ICustomGrantValidator>> CustomGrantValidators { get; set; }
 
         /// <summary>
         /// Gets or sets the custom request validator - Implements custom additional validation of authorize and token requests.
@@ -233,6 +251,12 @@ namespace Thinktecture.IdentityServer.Core.Configuration
         /// </value>
         public Registration<IExternalClaimsFilter> ExternalClaimsFilter { get; set; }
 
+        /// <summary>
+        /// Gets or sets the event service.
+        /// </summary>
+        /// <value>
+        /// The event service.
+        /// </value>
         public Registration<IEventService> EventService { get; set; }
 
         /// <summary>
@@ -242,6 +266,54 @@ namespace Thinktecture.IdentityServer.Core.Configuration
         /// The custom token validator.
         /// </value>
         public Registration<ICustomTokenValidator> CustomTokenValidator { get; set; }
+
+        /// <summary>
+        /// Gets or sets the redirect URI validator.
+        /// </summary>
+        /// <value>
+        /// The redirect URI validator.
+        /// </value>
+        public Registration<IRedirectUriValidator> RedirectUriValidator { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the localization service.
+        /// </summary>
+        /// <value>
+        /// The localization service.
+        /// </value>
+        public Registration<ILocalizationService> LocalizationService { get; set; }
+
+        /// <summary>
+        /// Gets or sets the secret parsers.
+        /// </summary>
+        /// <value>
+        /// The secret parsers.
+        /// </value>
+        public IEnumerable<Registration<ISecretParser>> SecretParsers { get; set; }
+
+        /// <summary>
+        /// Gets or sets the secret validators.
+        /// </summary>
+        /// <value>
+        /// The secret validators.
+        /// </value>
+        public IEnumerable<Registration<ISecretValidator>> SecretValidators { get; set; }
+
+        /// <summary>
+        /// Gets or sets the CORS policy service.
+        /// </summary>
+        /// <value>
+        /// The CORS policy service.
+        /// </value>
+        public Registration<ICorsPolicyService> CorsPolicyService { get; set; }
+
+        /// <summary>
+        /// Gets or sets the signing key service.
+        /// </summary>
+        /// <value>
+        /// The signing key service.
+        /// </value>
+        public Registration<ISigningKeyService> SigningKeyService { get; set; }
 
         internal void Validate()
         {
@@ -253,7 +325,7 @@ namespace Thinktecture.IdentityServer.Core.Configuration
             if (TokenHandleStore == null) Logger.Warn("TokenHandleStore not configured - falling back to InMemory");
             if (ConsentStore == null) Logger.Warn("ConsentStore not configured - falling back to InMemory");
             if (RefreshTokenStore == null) Logger.Warn("RefreshTokenStore not configured - falling back to InMemory");
-            if (ViewService == null) Logger.Info("ViewService not configured - falling back to EmbeddedAssets");
+            if (RedirectUriValidator != null) Logger.Warn("Using custom redirect URI validator - you are running with scissors.");
         }
 
         private void LogAndStop(string message)

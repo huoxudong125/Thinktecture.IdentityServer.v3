@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,28 +14,37 @@
  * limitations under the License.
  */
 
+using IdentityModel;
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Models;
+using IdentityServer3.Core.Services;
+using IdentityServer3.Core.Validation;
 using System;
+using System.ComponentModel;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.Models;
-using Thinktecture.IdentityServer.Core.Services;
-using Thinktecture.IdentityServer.Core.Validation;
 
-namespace Thinktecture.IdentityServer.Core.ResponseHandling
+#pragma warning disable 1591
+
+namespace IdentityServer3.Core.ResponseHandling
 {
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public class AuthorizeResponseGenerator
     {
         private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
 
         private readonly ITokenService _tokenService;
         private readonly IAuthorizationCodeStore _authorizationCodes;
+        private readonly IEventService _events;
 
-        public AuthorizeResponseGenerator(ITokenService tokenService, IAuthorizationCodeStore authorizationCodes)
+        public AuthorizeResponseGenerator(ITokenService tokenService, IAuthorizationCodeStore authorizationCodes, IEventService events)
         {
             _tokenService = tokenService;
             _authorizationCodes = authorizationCodes;
+            _events = events;
         }
 
         public async Task<AuthorizeResponse> CreateResponseAsync(ValidatedAuthorizeRequest request)
@@ -59,6 +68,8 @@ namespace Thinktecture.IdentityServer.Core.ResponseHandling
 
         private async Task<AuthorizeResponse> CreateHybridFlowResponseAsync(ValidatedAuthorizeRequest request)
         {
+            Logger.Info("Creating Hybrid Flow response.");
+
             var code = await CreateCodeAsync(request);
             var response = await CreateImplicitFlowResponseAsync(request, code);
             response.Code = code;
@@ -68,15 +79,24 @@ namespace Thinktecture.IdentityServer.Core.ResponseHandling
 
         public async Task<AuthorizeResponse> CreateCodeFlowResponseAsync(ValidatedAuthorizeRequest request)
         {
+            Logger.Info("Creating Authorization Code Flow response.");
+
             var code = await CreateCodeAsync(request);
 
-            return new AuthorizeResponse
+            var response = new AuthorizeResponse
             {
                 Request = request,
                 RedirectUri = request.RedirectUri,
                 Code = code,
                 State = request.State
             };
+
+            if (request.IsOpenIdRequest)
+            {
+                response.SessionState = GenerateSessionStateValue(request);
+            }
+
+            return response;
         }
 
         private async Task<string> CreateCodeAsync(ValidatedAuthorizeRequest request)
@@ -85,6 +105,7 @@ namespace Thinktecture.IdentityServer.Core.ResponseHandling
             {
                 Client = request.Client,
                 Subject = request.Subject,
+                SessionId = request.SessionId,
 
                 IsOpenId = request.IsOpenIdRequest,
                 RequestedScopes = request.ValidatedScopes.GrantedScopes,
@@ -95,14 +116,18 @@ namespace Thinktecture.IdentityServer.Core.ResponseHandling
             };
 
             // store id token and access token and return authorization code
-            var id = Guid.NewGuid().ToString("N");
+            var id = CryptoRandom.CreateUniqueId();
             await _authorizationCodes.StoreAsync(id, code);
-            
+
+            await RaiseCodeIssuedEventAsync(id, code);
+
             return id;
         }
 
         public async Task<AuthorizeResponse> CreateImplicitFlowResponseAsync(ValidatedAuthorizeRequest request, string authorizationCode = null)
         {
+            Logger.Info("Creating Implicit Flow response.");
+
             string accessTokenValue = null;
             int accessTokenLifetime = 0;
 
@@ -115,10 +140,10 @@ namespace Thinktecture.IdentityServer.Core.ResponseHandling
                     Subject = request.Subject,
                     Client = request.Client,
                     Scopes = request.ValidatedScopes.GrantedScopes,
-                    
+
                     ValidatedRequest = request
                 };
-                
+
                 var accessToken = await _tokenService.CreateAccessTokenAsync(tokenRequest);
                 accessTokenLifetime = accessToken.Lifetime;
 
@@ -145,7 +170,7 @@ namespace Thinktecture.IdentityServer.Core.ResponseHandling
                 jwt = await _tokenService.CreateSecurityTokenAsync(idToken);
             }
 
-            return new AuthorizeResponse
+            var response = new AuthorizeResponse
             {
                 Request = request,
                 RedirectUri = request.RedirectUri,
@@ -153,8 +178,46 @@ namespace Thinktecture.IdentityServer.Core.ResponseHandling
                 AccessTokenLifetime = accessTokenLifetime,
                 IdentityToken = jwt,
                 State = request.State,
-                Scope = request.ValidatedScopes.GrantedScopes.ToSpaceSeparatedString()
+                Scope = request.ValidatedScopes.GrantedScopes.ToSpaceSeparatedString(),
             };
+
+            if (request.IsOpenIdRequest)
+            {
+                response.SessionState = GenerateSessionStateValue(request);
+            }
+
+            return response;
+        }
+
+        private string GenerateSessionStateValue(ValidatedAuthorizeRequest request)
+        {
+            var sessionId = request.SessionId;
+            if (sessionId.IsMissing()) return null;
+
+            var salt = CryptoRandom.CreateUniqueId();
+            var clientId = request.ClientId;
+
+            var uri = new Uri(request.RedirectUri);
+            var origin = uri.Scheme + "://" + uri.Host;
+            if (!uri.IsDefaultPort)
+            {
+                origin += ":" + uri.Port;
+            }
+
+            var bytes = Encoding.UTF8.GetBytes(clientId + origin + sessionId + salt);
+            byte[] hash;
+
+            using (var sha = SHA256.Create())
+            {
+                hash = sha.ComputeHash(bytes);
+            }
+
+            return Base64Url.Encode(hash) + "." + salt;
+        }
+
+        private async Task RaiseCodeIssuedEventAsync(string id, AuthorizationCode code)
+        {
+            await _events.RaiseAuthorizationCodeIssuedEventAsync(id, code);
         }
     }
 }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,22 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-using Microsoft.Owin;
-using System;
+
+using IdentityServer3.Core.Configuration;
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Services;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Thinktecture.IdentityServer.Core.Configuration;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Services;
 
-namespace Thinktecture.IdentityServer.Core.Validation
+namespace IdentityServer3.Core.Validation
 {
-    public class EndSessionRequestValidator
+    internal class EndSessionRequestValidator
     {
+        private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
+
         private readonly ValidatedEndSessionRequest _validatedRequest;
         private readonly TokenValidator _tokenValidator;
+        private readonly IRedirectUriValidator _uriValidator;
+        private readonly IdentityServerOptions _options;
 
         public ValidatedEndSessionRequest ValidatedRequest
         {
@@ -38,24 +42,28 @@ namespace Thinktecture.IdentityServer.Core.Validation
             }
         }
 
-        public EndSessionRequestValidator(IdentityServerOptions options, IOwinContext context, TokenValidator tokenValidator, IClientStore clients)
+        public EndSessionRequestValidator(IdentityServerOptions options, TokenValidator tokenValidator, IRedirectUriValidator uriValidator)
         {
             _tokenValidator = tokenValidator;
+            _uriValidator = uriValidator;
+            _options = options;
 
             _validatedRequest = new ValidatedEndSessionRequest
             {
                 Options = options,
-                Environment = context.Environment
             };
         }
 
         public async Task<ValidationResult> ValidateAsync(NameValueCollection parameters, ClaimsPrincipal subject)
         {
+            Logger.Info("Start end session request validation");
+
             _validatedRequest.Raw = parameters;
             _validatedRequest.Subject = subject;
 
-            if (!subject.Identity.IsAuthenticated)
+            if (!subject.Identity.IsAuthenticated && _options.AuthenticationOptions.RequireAuthenticatedUserForSignOutMessage)
             {
+                Logger.Warn("User is anonymous. Ignoring end session parameters");
                 return Invalid();
             }
 
@@ -66,6 +74,7 @@ namespace Thinktecture.IdentityServer.Core.Validation
                 var tokenValidationResult = await _tokenValidator.ValidateIdentityTokenAsync(idTokenHint, null, false);
                 if (tokenValidationResult.IsError)
                 {
+                    LogError("Error validating id token hint.");
                     return Invalid();
                 }
 
@@ -73,10 +82,11 @@ namespace Thinktecture.IdentityServer.Core.Validation
 
                 // validate sub claim against currently logged on user
                 var subClaim = tokenValidationResult.Claims.FirstOrDefault(c => c.Type == Constants.ClaimTypes.Subject);
-                if (subClaim != null)
+                if (subClaim != null && subject.Identity.IsAuthenticated)
                 {
                     if (subject.GetSubjectId() != subClaim.Value)
                     {
+                        LogError("Current user does not match identity token");
                         return Invalid();
                     }
                 }
@@ -84,17 +94,12 @@ namespace Thinktecture.IdentityServer.Core.Validation
                 var redirectUri = parameters.Get(Constants.EndSessionRequest.PostLogoutRedirectUri);
                 if (redirectUri.IsPresent())
                 {
-                    Uri uri;
-                    if (Uri.TryCreate(redirectUri, UriKind.Absolute, out uri))
+                    _validatedRequest.PostLogOutUri = redirectUri;
+
+                    if (await _uriValidator.IsPostLogoutRedirectUriValidAsync(redirectUri, _validatedRequest.Client) == false)
                     {
-                        if (_validatedRequest.Client.PostLogoutRedirectUris.Contains(uri))
-                        {
-                            _validatedRequest.PostLogOutUri = uri;
-                        }
-                        else
-                        {
-                            return Invalid();
-                        }
+                        LogError("Invalid post logout URI");
+                        return Invalid();
                     }
 
                     var state = parameters.Get(Constants.EndSessionRequest.State);
@@ -105,6 +110,7 @@ namespace Thinktecture.IdentityServer.Core.Validation
                 }
             }
 
+            LogSuccess();
             return Valid();
         }
 
@@ -123,6 +129,22 @@ namespace Thinktecture.IdentityServer.Core.Validation
                 IsError = true,
                 Error = "Invalid request"
             };
+        }
+
+        private void LogError(string message)
+        {
+            var log = new EndSessionRequestValidationLog(_validatedRequest);
+            var json = LogSerializer.Serialize(log);
+            
+            Logger.ErrorFormat("{0}\n{1}", message, json);
+        }
+
+        private void LogSuccess()
+        {
+            var log = new EndSessionRequestValidationLog(_validatedRequest);
+            var json = LogSerializer.Serialize(log);
+
+            Logger.InfoFormat("{0}\n{1}", "End session request validation success", json);
         }
     }
 }

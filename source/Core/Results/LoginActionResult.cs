@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,19 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Models;
+using IdentityServer3.Core.Services;
+using IdentityServer3.Core.ViewModels;
 using System;
-using System.Collections.Generic;
-using Thinktecture.IdentityServer.Core.Models;
-using Thinktecture.IdentityServer.Core.Services;
-using Thinktecture.IdentityServer.Core.ViewModels;
 
-namespace Thinktecture.IdentityServer.Core.Results
+namespace IdentityServer3.Core.Results
 {
-    class LoginActionResult : HtmlStreamActionResult
+    internal class LoginActionResult : HtmlStreamActionResult
     {
-        public LoginActionResult(IViewService viewSvc, IDictionary<string, object> env, LoginViewModel model, SignInMessage message)
-            : base(async () => await viewSvc.Login(env, model, message))
+        public LoginActionResult(IViewService viewSvc, LoginViewModel model, SignInMessage message)
+            : base(async () => await viewSvc.Login(model, message))
         {
             if (viewSvc == null) throw new ArgumentNullException("viewSvc");
-            if (env == null) throw new ArgumentNullException("env");
             if (model == null) throw new ArgumentNullException("model");
             if (message == null) throw new ArgumentNullException("message");
         }

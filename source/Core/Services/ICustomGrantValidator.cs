@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-using System.Security.Claims;
+using IdentityServer3.Core.Validation;
 using System.Threading.Tasks;
-using Thinktecture.IdentityServer.Core.Validation;
 
-namespace Thinktecture.IdentityServer.Core.Services
+namespace IdentityServer3.Core.Services
 {
     /// <summary>
     /// Handles validation of token requests using custom grant types
@@ -30,6 +29,14 @@ namespace Thinktecture.IdentityServer.Core.Services
         /// </summary>
         /// <param name="request">The validated token request.</param>
         /// <returns>A principal</returns>
-        Task<ClaimsPrincipal> ValidateAsync(ValidatedTokenRequest request);
+        Task<CustomGrantValidationResult> ValidateAsync(ValidatedTokenRequest request);
+
+        /// <summary>
+        /// Returns the grant type this validator can deal with
+        /// </summary>
+        /// <value>
+        /// The type of the grant.
+        /// </value>
+        string GrantType { get; }
     }
 }

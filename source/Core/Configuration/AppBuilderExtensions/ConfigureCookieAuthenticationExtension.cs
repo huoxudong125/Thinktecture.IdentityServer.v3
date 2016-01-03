@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core;
+using IdentityServer3.Core.Configuration;
+using IdentityServer3.Core.Configuration.Hosting;
+using IdentityServer3.Core.Extensions;
 using Microsoft.Owin.Security;
 using Microsoft.Owin.Security.Cookies;
 using Microsoft.Owin.Security.DataHandler;
 using System;
-using Thinktecture.IdentityServer.Core;
-using Thinktecture.IdentityServer.Core.Configuration;
-using Thinktecture.IdentityServer.Core.Configuration.Hosting;
 
 namespace Owin
 {
@@ -31,7 +32,7 @@ namespace Owin
             if (options == null) throw new ArgumentNullException("options");
             if (dataProtector == null) throw new ArgumentNullException("dataProtector");
 
-            if (options.Prefix != null && options.Prefix.Length > 0)
+            if (options.Prefix.IsPresent())
             {
                 options.Prefix += ".";
             }
@@ -42,7 +43,9 @@ namespace Owin
                 CookieName = options.Prefix + Constants.PrimaryAuthenticationType,
                 ExpireTimeSpan = options.ExpireTimeSpan,
                 SlidingExpiration = options.SlidingExpiration,
-                TicketDataFormat = new TicketDataFormat(new DataProtectorAdapter(dataProtector, options.Prefix + Constants.PrimaryAuthenticationType))
+                CookieSecure = GetCookieSecure(options.SecureMode),
+                TicketDataFormat = new TicketDataFormat(new DataProtectorAdapter(dataProtector, options.Prefix + Constants.PrimaryAuthenticationType)),
+                SessionStore = GetSessionStore(options.SessionStoreProvider)
             };
             app.UseCookieAuthentication(primary);
 
@@ -53,6 +56,7 @@ namespace Owin
                 AuthenticationMode = AuthenticationMode.Passive,
                 ExpireTimeSpan = Constants.ExternalCookieTimeSpan,
                 SlidingExpiration = false,
+                CookieSecure = GetCookieSecure(options.SecureMode),
                 TicketDataFormat = new TicketDataFormat(new DataProtectorAdapter(dataProtector, options.Prefix + Constants.ExternalAuthenticationType))
             };
             app.UseCookieAuthentication(external);
@@ -64,6 +68,7 @@ namespace Owin
                 AuthenticationMode = AuthenticationMode.Passive,
                 ExpireTimeSpan = options.ExpireTimeSpan,
                 SlidingExpiration = options.SlidingExpiration,
+                CookieSecure = GetCookieSecure(options.SecureMode),
                 TicketDataFormat = new TicketDataFormat(new DataProtectorAdapter(dataProtector, options.Prefix + Constants.PartialSignInAuthenticationType))
             };
             app.UseCookieAuthentication(partial);
@@ -73,7 +78,6 @@ namespace Owin
                 if (!String.IsNullOrWhiteSpace(path))
                 {
                     primary.CookiePath = external.CookiePath = path;
-                    // TODO: should we leave the partial path to "/"?
                     partial.CookiePath = path;
                 }
             };
@@ -99,6 +103,24 @@ namespace Owin
             }
 
             return app;
+        }
+
+        private static CookieSecureOption GetCookieSecure(CookieSecureMode cookieSecureMode)
+        {
+            switch (cookieSecureMode)
+            {
+                case CookieSecureMode.Always:
+                    return CookieSecureOption.Always;
+                case CookieSecureMode.SameAsRequest:
+                    return CookieSecureOption.SameAsRequest;
+                default:
+                    throw new InvalidOperationException("Invalid CookieSecureMode");
+            }
+        }
+
+        private static IAuthenticationSessionStore GetSessionStore(IAuthenticationSessionStoreProvider provider)
+        {
+            return provider != null ? new AuthenticationSessionStoreWrapper(provider) : null;
         }
     }
 }

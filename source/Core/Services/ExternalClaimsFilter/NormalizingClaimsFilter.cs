@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,35 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Configuration.Hosting;
 using System.Collections.Generic;
-using System.Linq;
 using System.Security.Claims;
-using Thinktecture.IdentityServer.Core.Configuration.Hosting;
-using Thinktecture.IdentityServer.Core.Models;
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+namespace IdentityServer3.Core.Services.Default
 {
+    /// <summary>
+    /// Claims filter to convert from WIF claim types to OpenID Connect claim types.
+    /// </summary>
     public class NormalizingClaimsFilter : IExternalClaimsFilter
     {
+        /// <summary>
+        /// Filters the specified claims from an external identity provider.
+        /// </summary>
+        /// <param name="provider">The identifier for the external identity provider.</param>
+        /// <param name="claims">The incoming claims.</param>
+        /// <returns>
+        /// The transformed claims.
+        /// </returns>
         public IEnumerable<Claim> Filter(string provider, IEnumerable<Claim> claims)
         {
             return Filter(claims);
         }
-        
+
+        /// <summary>
+        /// Filters the specified claims.
+        /// </summary>
+        /// <param name="claims">The claims.</param>
+        /// <returns></returns>
         public IEnumerable<Claim> Filter(IEnumerable<Claim> claims)
         {
             return ClaimMap.Map(claims);

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,60 +13,77 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-using System.Collections.Generic;
-using Thinktecture.IdentityServer.Core.Configuration;
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+using IdentityServer3.Core.Configuration;
+using System;
+
+namespace IdentityServer3.Core.Services.Default
 {
-    public class DefaultViewServiceRegistration : Registration<IViewService>
+    /// <summary>
+    /// Registration for the default view service.
+    /// </summary>
+    public class DefaultViewServiceRegistration : DefaultViewServiceRegistration<DefaultViewService>
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DefaultViewServiceRegistration"/> class.
+        /// </summary>
         public DefaultViewServiceRegistration()
         {
-            this.TypeFactory = () => new DefaultViewService();
         }
 
-        public DefaultViewServiceRegistration(DefaultViewServiceConfiguration config)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DefaultViewServiceRegistration"/> class.
+        /// </summary>
+        /// <param name="options">The options.</param>
+        public DefaultViewServiceRegistration(DefaultViewServiceOptions options)
+            : base(options)
         {
-            this.TypeFactory = () => new DefaultViewService(config);
         }
     }
-
-    public class DefaultViewServiceConfiguration
+    
+    /// <summary>
+    /// Registration for a customer view service derived from the DefaultViewService.
+    /// </summary>
+    public class DefaultViewServiceRegistration<T> : Registration<IViewService, T>
+        where T : DefaultViewService
     {
-        internal static readonly DefaultViewServiceConfiguration Default = 
-            new DefaultViewServiceConfiguration();
+        const string InnerRegistrationName = "DefaultViewServiceRegistration.inner";
 
-        public DefaultViewServiceConfiguration()
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DefaultViewServiceRegistration"/> class.
+        /// </summary>
+        public DefaultViewServiceRegistration()
+            : this(new DefaultViewServiceOptions())
         {
-            // adding default CSS here so hosting application can choose to remove it
-            Stylesheets = new HashSet<string>
-            {
-                "~/assets/styles.min.css"
-            };
-
-            
-            Scripts = new HashSet<string>();
-            CacheViews = true;
         }
 
-        static volatile IViewLoader _loader = null;
-        internal IViewLoader GetLoader()
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DefaultViewServiceRegistration"/> class.
+        /// </summary>
+        /// <param name="options">The options.</param>
+        /// <exception cref="System.ArgumentNullException">options</exception>
+        public DefaultViewServiceRegistration(DefaultViewServiceOptions options)
         {
-            if (_loader == null)
+            if (options == null) throw new ArgumentNullException("options");
+
+            AdditionalRegistrations.Add(new Registration<DefaultViewServiceOptions>(options));
+
+            if (options.ViewLoader == null)
             {
-                IViewLoader loader = ViewLoader ?? new FileSystemWithEmbeddedFallbackViewLoader();
-                if (CacheViews)
-                {
-                    loader = new CachingLoader(loader);
-                }
-                _loader = loader;
+                options.ViewLoader = new Registration<IViewLoader, FileSystemWithEmbeddedFallbackViewLoader>();
             }
-            return _loader;
+
+            if (options.CacheViews)
+            {
+                AdditionalRegistrations.Add(new Registration<IViewLoader>(options.ViewLoader, InnerRegistrationName));
+                var cache = new ResourceCache();
+                AdditionalRegistrations.Add(new Registration<IViewLoader>(
+                    resolver => new CachingLoader(cache, resolver.Resolve<IViewLoader>(InnerRegistrationName))));
+            }
+            else
+            {
+                AdditionalRegistrations.Add(options.ViewLoader);
+            }
         }
-        
-        public ICollection<string> Stylesheets { get; set; }
-        public ICollection<string> Scripts { get; set; }
-        public IViewLoader ViewLoader { get; set; }
-        public bool CacheViews { get; set; }
     }
 }

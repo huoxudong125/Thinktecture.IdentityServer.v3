@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,31 +14,31 @@
  * limitations under the License.
  */
 
+using IdentityModel;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Claims;
-using Thinktecture.IdentityModel;
-using Thinktecture.IdentityModel.Extensions;
 
-namespace Thinktecture.IdentityServer.Core
+namespace IdentityServer3.Core
 {
-    public static class IdentityServerPrincipal
+    internal static class IdentityServerPrincipal
     {
         public static ClaimsPrincipal Create(
             string subject,
-            string displayName, 
-            string authenticationMethod = Constants.AuthenticationMethods.Password, 
-            string idp = Constants.BuiltInIdentityProvider, 
+            string displayName,
+            string authenticationMethod = Constants.AuthenticationMethods.Password,
+            string idp = Constants.BuiltInIdentityProvider,
             string authenticationType = Constants.PrimaryAuthenticationType,
             long authenticationTime = 0)
         {
             if (String.IsNullOrWhiteSpace(subject)) throw new ArgumentNullException("subject");
-            if (String.IsNullOrWhiteSpace(displayName)) throw new ArgumentNullException("name");
+            if (String.IsNullOrWhiteSpace(displayName)) throw new ArgumentNullException("displayName");
             if (String.IsNullOrWhiteSpace(authenticationMethod)) throw new ArgumentNullException("authenticationMethod");
             if (String.IsNullOrWhiteSpace(idp)) throw new ArgumentNullException("idp");
             if (String.IsNullOrWhiteSpace(authenticationType)) throw new ArgumentNullException("authenticationType");
 
-            if (authenticationTime <= 0) authenticationTime = DateTime.UtcNow.ToEpochTime();
+            if (authenticationTime <= 0) authenticationTime = DateTimeOffset.UtcNow.ToEpochTime();
 
             var claims = new List<Claim>
             {
@@ -49,7 +49,7 @@ namespace Thinktecture.IdentityServer.Core
                 new Claim(Constants.ClaimTypes.AuthenticationTime, authenticationTime.ToString(), ClaimValueTypes.Integer)
             };
 
-            var id = new ClaimsIdentity(claims, authenticationType);
+            var id = new ClaimsIdentity(claims, authenticationType, Constants.ClaimTypes.Name, Constants.ClaimTypes.Role);
             return new ClaimsPrincipal(id);
         }
 
@@ -58,7 +58,7 @@ namespace Thinktecture.IdentityServer.Core
             // we require the following claims
             var subject = principal.FindFirst(Constants.ClaimTypes.Subject);
             if (subject == null) throw new InvalidOperationException("sub claim is missing");
-            
+
             var name = principal.FindFirst(Constants.ClaimTypes.Name);
             if (name == null) throw new InvalidOperationException("name claim is missing");
 
@@ -71,14 +71,84 @@ namespace Thinktecture.IdentityServer.Core
             var idp = principal.FindFirst(Constants.ClaimTypes.IdentityProvider);
             if (idp == null) throw new InvalidOperationException("idp claim is missing");
 
-            var id = new ClaimsIdentity(principal.Claims, authenticationType);
+            var id = new ClaimsIdentity(principal.Claims, authenticationType, Constants.ClaimTypes.Name, Constants.ClaimTypes.Role);
             return new ClaimsPrincipal(id);
         }
 
-        public static ClaimsPrincipal FromSubjectId(string subjectId)
+        public static ClaimsPrincipal FromSubjectId(string subjectId, IEnumerable<Claim> additionalClaims = null)
         {
+            var claims = new List<Claim>
+            {
+                new Claim(Constants.ClaimTypes.Subject, subjectId)
+            };
+
+            if (additionalClaims != null)
+            {
+                claims.AddRange(additionalClaims);
+            }
+
             return Principal.Create(Constants.PrimaryAuthenticationType,
-                new Claim(Constants.ClaimTypes.Subject, subjectId));
+                claims.Distinct(new ClaimComparer()).ToArray());
+        }
+
+        public static ClaimsPrincipal FromClaims(IEnumerable<Claim> claims, bool allowMissing = false)
+        {
+            var sub = claims.FirstOrDefault(c => c.Type == Constants.ClaimTypes.Subject);
+            var amr = claims.FirstOrDefault(c => c.Type == Constants.ClaimTypes.AuthenticationMethod);
+            var idp = claims.FirstOrDefault(c => c.Type == Constants.ClaimTypes.IdentityProvider);
+            var authTime = claims.FirstOrDefault(c => c.Type == Constants.ClaimTypes.AuthenticationTime);
+
+            var id = new ClaimsIdentity(Constants.BuiltInIdentityProvider);
+
+            if (sub != null)
+            {
+                id.AddClaim(sub);
+            }
+            else
+            {
+                if (allowMissing == false)
+                {
+                    throw new InvalidOperationException("sub claim is missing");
+                }
+            }
+
+            if (amr != null)
+            {
+                id.AddClaim(amr);
+            }
+            else
+            {
+                if (allowMissing == false)
+                {
+                    throw new InvalidOperationException("amr claim is missing");
+                }
+            }
+
+            if (idp != null)
+            {
+                id.AddClaim(idp);
+            }
+            else
+            {
+                if (allowMissing == false)
+                {
+                    throw new InvalidOperationException("idp claim is missing");
+                }
+            }
+
+            if (authTime != null)
+            {
+                id.AddClaim(authTime);
+            }
+            else
+            {
+                if (allowMissing == false)
+                {
+                    throw new InvalidOperationException("auth_time claim is missing");
+                }
+            }
+
+            return new ClaimsPrincipal(id);
         }
     }
 }

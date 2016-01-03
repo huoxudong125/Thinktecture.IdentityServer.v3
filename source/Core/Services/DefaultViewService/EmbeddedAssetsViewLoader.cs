@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,22 @@
  * limitations under the License.
  */
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+using System.Threading.Tasks;
+namespace IdentityServer3.Core.Services.Default
 {
+    /// <summary>
+    /// View loaded that loads HTML templates from the embedded assets.
+    /// </summary>
     public class EmbeddedAssetsViewLoader : IViewLoader
     {
-        public string Load(string name)
+        /// <summary>
+        /// Loads the HTML for the named view.
+        /// </summary>
+        /// <param name="name">The name.</param>
+        /// <returns></returns>
+        public Task<string> LoadAsync(string name)
         {
-            return AssetManager.LoadLayoutWithPage(name);
+            return Task.FromResult(AssetManager.LoadLayoutWithPage(name));
         }
     }
 }

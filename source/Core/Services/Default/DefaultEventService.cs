@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,30 +14,36 @@
  * limitations under the License.
  */
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-using Thinktecture.IdentityServer.Core.Events;
-using Thinktecture.IdentityServer.Core.Logging;
+using IdentityServer3.Core.Events;
+using IdentityServer3.Core.Logging;
+using System;
+using System.Threading.Tasks;
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+namespace IdentityServer3.Core.Services.Default
 {
+    /// <summary>
+    /// Default implementation of the event service. Write events raised to the log.
+    /// </summary>
     public class DefaultEventService : IEventService
     {
-        protected static readonly ILog Logger = LogProvider.GetLogger("Events");
+        /// <summary>
+        /// The logger
+        /// </summary>
+        private static readonly ILog Logger = LogProvider.GetLogger("Events");
 
-        public void Raise(EventBase evt)
+        /// <summary>
+        /// Raises the specified event.
+        /// </summary>
+        /// <param name="evt">The event.</param>
+        /// <exception cref="System.ArgumentNullException">evt</exception>
+        public virtual Task RaiseAsync<T>(Event<T> evt)
         {
-            var settings = new JsonSerializerSettings
-            {
-                DefaultValueHandling = DefaultValueHandling.Ignore,
-                NullValueHandling = NullValueHandling.Ignore,
-                DateFormatHandling = DateFormatHandling.IsoDateFormat,
-                Formatting = Formatting.Indented,
-            };
-            settings.Converters.Add(new StringEnumConverter());
-
-            var json = JsonConvert.SerializeObject(evt, settings);
+            if (evt == null) throw new ArgumentNullException("evt");
+            
+            var json = LogSerializer.Serialize(evt);
             Logger.Info(json);
+
+            return Task.FromResult(0);
         }
     }
 }

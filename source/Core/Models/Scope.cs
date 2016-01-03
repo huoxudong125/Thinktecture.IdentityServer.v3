@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 using System.Collections.Generic;
 
-namespace Thinktecture.IdentityServer.Core.Models
+namespace IdentityServer3.Core.Models
 {
     /// <summary>
     /// Models are resource (either identity resource or web api resource)
@@ -24,7 +24,7 @@ namespace Thinktecture.IdentityServer.Core.Models
     public class Scope
     {
         /// <summary>
-        /// Scope enabled
+        /// Indicates if scope is enabled and can be requested. Defaults to true.
         /// </summary>
         public bool Enabled { get; set; }
 
@@ -44,27 +44,27 @@ namespace Thinktecture.IdentityServer.Core.Models
         public string Description { get; set; }
         
         /// <summary>
-        /// Specifies whether the user can de-select the scope on the consent screen.
+        /// Specifies whether the user can de-select the scope on the consent screen. Defaults to false.
         /// </summary>
         public bool Required { get; set; }
 
         /// <summary>
-        /// Specifies whether the consent screen will emphasize this scope. Use this setting for sensitive or important scopes.
+        /// Specifies whether the consent screen will emphasize this scope. Use this setting for sensitive or important scopes. Defaults to false.
         /// </summary>
         public bool Emphasize { get; set; }
 
         /// <summary>
-        /// Specifies whether this scope is about identity information from the userinfo endpoint, or a resource (e.g. a Web API)
+        /// Specifies whether this scope is about identity information from the userinfo endpoint, or a resource (e.g. a Web API). Defaults to Resource.
         /// </summary>
         public ScopeType Type { get; set; }
         
         /// <summary>
         /// List of user claims that should be included in the identity (identity scope) or access token (resource scope). 
         /// </summary>
-        public IEnumerable<ScopeClaim> Claims { get; set; }
+        public List<ScopeClaim> Claims { get; set; }
         
         /// <summary>
-        /// If enabled, all claims for the user will be included in the token
+        /// If enabled, all claims for the user will be included in the token. Defaults to false.
         /// </summary>
         public bool IncludeAllClaimsForUser { get; set; }
         
@@ -74,9 +74,22 @@ namespace Thinktecture.IdentityServer.Core.Models
         public string ClaimsRule { get; set; }
 
         /// <summary>
-        /// Specifies whether this scope is shown in the discovery document (defaults to true)
+        /// Specifies whether this scope is shown in the discovery document. Defaults to true.
         /// </summary>
         public bool ShowInDiscoveryDocument { get; set; }
+
+        /// <summary>
+        /// Gets or sets the scope secrets.
+        /// </summary>
+        /// <value>
+        /// The scope secrets.
+        /// </value>
+        public List<Secret> ScopeSecrets { get; set; }
+
+        /// <summary>
+        /// Specifies whether this scope is allowed to see other scopes when using the introspection endpoint
+        /// </summary>
+        public bool AllowUnrestrictedIntrospection { get; set; }
 
         /// <summary>
         /// Creates a Scope with default values
@@ -84,10 +97,12 @@ namespace Thinktecture.IdentityServer.Core.Models
         public Scope()
         {
             Type = ScopeType.Resource;
-            Claims = new ScopeClaim[] { };
+            Claims = new List<ScopeClaim>();
+            ScopeSecrets = new List<Secret>();
             IncludeAllClaimsForUser = false;
             Enabled = true;
             ShowInDiscoveryDocument = true;
+            AllowUnrestrictedIntrospection = false;
         }
     }
 }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,73 +14,109 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Configuration;
+using IdentityServer3.Core.Configuration.Hosting;
+using IdentityServer3.Core.Events;
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.ResponseHandling;
+using IdentityServer3.Core.Results;
+using IdentityServer3.Core.Services;
+using IdentityServer3.Core.Validation;
 using System.Collections.Specialized;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
-using Thinktecture.IdentityServer.Core.Configuration;
-using Thinktecture.IdentityServer.Core.Configuration.Hosting;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.ResponseHandling;
-using Thinktecture.IdentityServer.Core.Results;
-using Thinktecture.IdentityServer.Core.Validation;
 
-namespace Thinktecture.IdentityServer.Core.Endpoints
+namespace IdentityServer3.Core.Endpoints
 {
-    [RoutePrefix(Constants.RoutePaths.Oidc.Token)]
+    /// <summary>
+    /// OAuth2/OpenID Conect token endpoint
+    /// </summary>
     [NoCache]
     [PreventUnsupportedRequestMediaTypes(allowFormUrlEncoded: true)]
-    public class TokenEndpointController : ApiController
+    internal class TokenEndpointController : ApiController
     {
         private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
 
         private readonly TokenResponseGenerator _generator;
         private readonly TokenRequestValidator _requestValidator;
-        private readonly ClientValidator _clientValidator;
+        private readonly ClientSecretValidator _clientValidator;
         private readonly IdentityServerOptions _options;
+        private readonly IEventService _events;
 
-        public TokenEndpointController(IdentityServerOptions options, TokenRequestValidator requestValidator, ClientValidator clientValidator, TokenResponseGenerator generator)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TokenEndpointController" /> class.
+        /// </summary>
+        /// <param name="options">The options.</param>
+        /// <param name="requestValidator">The request validator.</param>
+        /// <param name="clientValidator">The client validator.</param>
+        /// <param name="generator">The generator.</param>
+        /// <param name="events">The events service.</param>
+        public TokenEndpointController(IdentityServerOptions options, TokenRequestValidator requestValidator, ClientSecretValidator clientValidator, TokenResponseGenerator generator, IEventService events)
         {
             _requestValidator = requestValidator;
             _clientValidator = clientValidator;
             _generator = generator;
             _options = options;
+            _events = events;
         }
 
-        [Route]
+        /// <summary>
+        /// POST
+        /// </summary>
+        /// <returns>Token response</returns>
+        [HttpPost]
         public async Task<IHttpActionResult> Post()
         {
             Logger.Info("Start token request");
 
-            return await ProcessAsync(await Request.Content.ReadAsFormDataAsync());
-        }
-
-        public async Task<IHttpActionResult> ProcessAsync(NameValueCollection parameters)
-        {
-            if (!_options.Endpoints.TokenEndpoint.IsEnabled)
+            var response = await ProcessAsync(await Request.GetOwinContext().ReadRequestFormAsNameValueCollectionAsync());
+            
+            if (response is TokenErrorResult)
             {
-                Logger.Warn("Endpoint is disabled. Aborting");
-                return NotFound();
+                var details = response as TokenErrorResult;
+                await RaiseFailureEventAsync(details.Error);
+            }
+            else
+            {
+                await _events.RaiseSuccessfulEndpointEventAsync(EventConstants.EndpointNames.Token);
             }
 
+            Logger.Info("End token request");
+            return response;
+        }
+
+        /// <summary>
+        /// Processes the token request
+        /// </summary>
+        /// <param name="parameters">The parameters.</param>
+        /// <returns>Token response</returns>
+        public async Task<IHttpActionResult> ProcessAsync(NameValueCollection parameters)
+        {
             // validate client credentials and client
-            var client = await _clientValidator.ValidateClientAsync(parameters, Request.Headers.Authorization);
-            if (client == null)
+            var clientResult = await _clientValidator.ValidateAsync();
+            if (clientResult.IsError)
             {
                 return this.TokenErrorResponse(Constants.TokenErrors.InvalidClient);
             }
 
             // validate the token request
-            var result = await _requestValidator.ValidateRequestAsync(parameters, client);
+            var requestResult = await _requestValidator.ValidateRequestAsync(parameters, clientResult.Client);
 
-            if (result.IsError)
+            if (requestResult.IsError)
             {
-                return this.TokenErrorResponse(result.Error);
+                return this.TokenErrorResponse(requestResult.Error, requestResult.ErrorDescription);
             }
 
             // return response
             var response = await _generator.ProcessAsync(_requestValidator.ValidatedRequest);
             return this.TokenResponse(response);
+        }
+
+        private async Task RaiseFailureEventAsync(string error)
+        {
+            await _events.RaiseFailureEndpointEventAsync(EventConstants.EndpointNames.Token, error);
         }
     }
 }

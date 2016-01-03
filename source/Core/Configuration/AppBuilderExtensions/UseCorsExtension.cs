@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,22 +14,19 @@
  * limitations under the License.
  */
 
-using Thinktecture.IdentityServer.Core;
-using Thinktecture.IdentityServer.Core.Configuration;
+using IdentityServer3.Core;
+using IdentityServer3.Core.Configuration.Hosting;
 
 namespace Owin
 {
     internal static class UseCorsExtension
     {
-        public static void UseCors(this IAppBuilder app, CorsPolicy policy)
+        public static void UseCors(this IAppBuilder app)
         {
-            if (policy != null)
+            app.UseCors(new Microsoft.Owin.Cors.CorsOptions
             {
-                app.UseCors(new Microsoft.Owin.Cors.CorsOptions
-                {
-                    PolicyProvider = new CorsPolicyProvider(policy, Constants.RoutePaths.CorsPaths)
-                });
-            }
+                PolicyProvider = new CorsPolicyProvider(Constants.RoutePaths.CorsPaths)
+            });
         }
     }
 }

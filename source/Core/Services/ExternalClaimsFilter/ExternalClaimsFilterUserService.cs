@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,49 +14,60 @@
  * limitations under the License.
  */
 
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Claims;
-using Thinktecture.IdentityServer.Core.Configuration.Hosting;
-using Thinktecture.IdentityServer.Core.Models;
+using IdentityServer3.Core.Models;
+using System;
+using System.Threading.Tasks;
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+namespace IdentityServer3.Core.Services.Default
 {
-    public class ExternalClaimsFilterUserService : IUserService
+    internal class ExternalClaimsFilterUserService : IUserService
     {
-        IExternalClaimsFilter filter;
-        IUserService inner;
+        readonly IExternalClaimsFilter filter;
+        readonly IUserService inner;
 
         public ExternalClaimsFilterUserService(IExternalClaimsFilter filter, IUserService inner)
         {
+            if (filter == null) throw new ArgumentNullException("filter");
+            if (inner == null) throw new ArgumentNullException("inner");
+
             this.filter = filter;
             this.inner = inner;
         }
 
-        public System.Threading.Tasks.Task<AuthenticateResult> PreAuthenticateAsync(IDictionary<string, object> env, SignInMessage message)
+        public Task PreAuthenticateAsync(PreAuthenticationContext context)
         {
-            return inner.PreAuthenticateAsync(env, message);
+            return inner.PreAuthenticateAsync(context);
         }
 
-        public System.Threading.Tasks.Task<AuthenticateResult> AuthenticateLocalAsync(string username, string password, SignInMessage message = null)
+        public Task AuthenticateLocalAsync(LocalAuthenticationContext context)
         {
-            return inner.AuthenticateLocalAsync(username, password, message);
+            return inner.AuthenticateLocalAsync(context);
         }
 
-        public System.Threading.Tasks.Task<AuthenticateResult> AuthenticateExternalAsync(Models.ExternalIdentity externalUser)
+        public Task AuthenticateExternalAsync(ExternalAuthenticationContext context)
         {
-            externalUser.Claims = filter.Filter(externalUser.Provider, externalUser.Claims);
-            return inner.AuthenticateExternalAsync(externalUser);
+            context.ExternalIdentity.Claims = filter.Filter(context.ExternalIdentity.Provider, context.ExternalIdentity.Claims);
+            return inner.AuthenticateExternalAsync(context);
         }
 
-        public System.Threading.Tasks.Task<IEnumerable<Claim>> GetProfileDataAsync(ClaimsPrincipal subject, IEnumerable<string> requestedClaimTypes = null)
+        public Task PostAuthenticateAsync(PostAuthenticationContext context)
         {
-            return inner.GetProfileDataAsync(subject, requestedClaimTypes);
+            return inner.PostAuthenticateAsync(context);
+        }
+        
+        public Task GetProfileDataAsync(ProfileDataRequestContext context)
+        {
+            return inner.GetProfileDataAsync(context);
         }
 
-        public System.Threading.Tasks.Task<bool> IsActiveAsync(ClaimsPrincipal subject)
+        public Task IsActiveAsync(IsActiveContext context)
         {
-            return inner.IsActiveAsync(subject);
+            return inner.IsActiveAsync(context);
+        }
+
+        public Task SignOutAsync(SignOutContext context)
+        {
+            return inner.SignOutAsync(context);
         }
     }
 }

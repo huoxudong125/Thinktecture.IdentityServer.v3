@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,36 +14,63 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Configuration;
+using IdentityServer3.Core.Events;
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Services;
 using System.Net;
 using System.Net.Http;
+using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Web.Http;
-using Thinktecture.IdentityServer.Core.Configuration;
-using Thinktecture.IdentityServer.Core.Logging;
 
-namespace Thinktecture.IdentityServer.Core.Endpoints
+namespace IdentityServer3.Core.Endpoints
 {
-    public class CspReportController : ApiController
+    [HostAuthentication(Constants.PrimaryAuthenticationType)]
+    internal class CspReportController : ApiController
     {
         private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
 
-        readonly IdentityServerOptions options;
-        
-        public CspReportController(IdentityServerOptions options)
+        private readonly IdentityServerOptions options;
+        private readonly IEventService eventService;
+
+        public CspReportController(IdentityServerOptions options, IEventService eventService)
         {
             this.options = options;
+            this.eventService = eventService;
         }
 
-        [Route(Constants.RoutePaths.CspReport, Name=Constants.RouteNames.CspReport)]
+        [HttpPost]
         public async Task<IHttpActionResult> Post()
         {
-            if (!options.CspOptions.ReportEndpoint.IsEnabled)
+            Logger.Info("CSP Report endpoint requested");
+
+            if (Request.Content.Headers.ContentLength.HasValue && 
+                Request.Content.Headers.ContentLength.Value > options.InputLengthRestrictions.CspReport)
             {
-                return NotFound();
+                var msg = "Request content exceeds max length";
+                Logger.Warn(msg);
+                await eventService.RaiseFailureEndpointEventAsync(EventConstants.EndpointNames.CspReport, msg);
+                return BadRequest();
             }
 
-            var json = await Request.Content.ReadAsStringAsync();
-            Logger.Error(json);
+            var json = await Request.GetOwinContext().Request.ReadBodyAsStringAsync();
+            if (json.Length > options.InputLengthRestrictions.CspReport)
+            {
+                var msg = "Request content exceeds max length";
+                Logger.Warn(msg);
+                await eventService.RaiseFailureEndpointEventAsync(EventConstants.EndpointNames.CspReport, msg);
+                return BadRequest();
+            }
+
+            if (json.IsPresent())
+            {
+                Logger.InfoFormat("CSP Report data: {0}", json);
+                await eventService.RaiseCspReportEventAsync(json, User as ClaimsPrincipal);
+            }
+
+            Logger.Info("Rendering 204");
             return ResponseMessage(Request.CreateResponse(HttpStatusCode.NoContent));
         }
     }

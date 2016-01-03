@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Logging;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -21,13 +22,14 @@ using System.Net.Http.Formatting;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
-using Thinktecture.IdentityServer.Core.Logging;
 
-namespace Thinktecture.IdentityServer.Core.Results
+namespace IdentityServer3.Core.Results
 {
-    public class UserInfoResult : IHttpActionResult
+    internal class UserInfoResult : IHttpActionResult
     {
         private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
+        private readonly static JsonMediaTypeFormatter Formatter = new JsonMediaTypeFormatter();
+
         private readonly Dictionary<string, object> _claims;
         
         public UserInfoResult(Dictionary<string, object> claims)
@@ -42,7 +44,7 @@ namespace Thinktecture.IdentityServer.Core.Results
 
         private HttpResponseMessage Execute()
         {
-            var content = new ObjectContent<Dictionary<string, object>>(_claims, new JsonMediaTypeFormatter());
+            var content = new ObjectContent<Dictionary<string, object>>(_claims, Formatter);
             var message = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = content

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,31 +14,33 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Models;
+using IdentityServer3.Core.Services;
+using IdentityServer3.Core.Validation;
+using IdentityServer3.Core.ViewModels;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Thinktecture.IdentityServer.Core.Models;
-using Thinktecture.IdentityServer.Core.Validation;
-using Thinktecture.IdentityServer.Core.ViewModels;
 
-namespace Thinktecture.IdentityServer.Core.Extensions
+namespace IdentityServer3.Core.Extensions
 {
-    static class ValidatedAuthorizeRequestExtensions
+    internal static class ValidatedAuthorizeRequestExtensions
     {
-        public static IEnumerable<ConsentScopeViewModel> GetIdentityScopes(this ValidatedAuthorizeRequest validatedRequest)
+        public static IEnumerable<ConsentScopeViewModel> GetIdentityScopes(this ValidatedAuthorizeRequest validatedRequest, ILocalizationService localizationService)
         {
             var requestedScopes = validatedRequest.ValidatedScopes.RequestedScopes.Where(x => x.Type == ScopeType.Identity);
             var consentedScopeNames = validatedRequest.ValidatedScopes.GrantedScopes.Select(x => x.Name);
-            return requestedScopes.ToConsentScopeViewModel(consentedScopeNames);
+            return requestedScopes.ToConsentScopeViewModel(consentedScopeNames, localizationService);
         }
 
-        public static IEnumerable<ConsentScopeViewModel> GetResourceScopes(this ValidatedAuthorizeRequest validatedRequest)
+        public static IEnumerable<ConsentScopeViewModel> GetResourceScopes(this ValidatedAuthorizeRequest validatedRequest, ILocalizationService localizationService)
         {
             var requestedScopes = validatedRequest.ValidatedScopes.RequestedScopes.Where(x=> x.Type == ScopeType.Resource);
             var consentedScopeNames = validatedRequest.ValidatedScopes.GrantedScopes.Select(x => x.Name);
-            return requestedScopes.ToConsentScopeViewModel(consentedScopeNames);
+            return requestedScopes.ToConsentScopeViewModel(consentedScopeNames, localizationService);
         }
 
-        public static IEnumerable<ConsentScopeViewModel> ToConsentScopeViewModel(this IEnumerable<Scope> scopes, IEnumerable<string> selected)
+        public static IEnumerable<ConsentScopeViewModel> ToConsentScopeViewModel(this IEnumerable<Scope> scopes, IEnumerable<string> selected, ILocalizationService localizationService)
         {
             var values =
                 from s in scopes
@@ -46,12 +48,19 @@ namespace Thinktecture.IdentityServer.Core.Extensions
                 {
                     Selected = selected.Contains(s.Name),
                     Name = s.Name,
-                    DisplayName = s.DisplayName,
-                    Description = s.Description,
+                    DisplayName = s.DisplayName ?? localizationService.GetScopeDisplayName(s.Name),
+                    Description = s.Description ?? localizationService.GetScopeDescription(s.Name),
                     Emphasize = s.Emphasize,
                     Required = s.Required
                 };
             return values;
+        }
+
+        internal static bool HasIdpAcrValue(this ValidatedAuthorizeRequest request)
+        {
+            if (request == null) throw new ArgumentNullException("request");
+
+            return request.AuthenticationContextReferenceClasses.Any(x => x.StartsWith(Constants.KnownAcrValues.HomeRealm));
         }
     }
 }

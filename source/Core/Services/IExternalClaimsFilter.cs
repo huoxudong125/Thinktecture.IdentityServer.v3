@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,19 @@
 using System.Collections.Generic;
 using System.Security.Claims;
 
-namespace Thinktecture.IdentityServer.Core.Services
+namespace IdentityServer3.Core.Services
 {
+    /// <summary>
+    /// Models a mechanism for claims transformation for claims provided from external identity providers.
+    /// </summary>
     public interface IExternalClaimsFilter
     {
+        /// <summary>
+        /// Filters the specified claims from an external identity provider.
+        /// </summary>
+        /// <param name="provider">The identifier for the external identity provider.</param>
+        /// <param name="claims">The incoming claims.</param>
+        /// <returns>The transformed claims.</returns>
         IEnumerable<Claim> Filter(string provider, IEnumerable<Claim> claims);
     }
 }

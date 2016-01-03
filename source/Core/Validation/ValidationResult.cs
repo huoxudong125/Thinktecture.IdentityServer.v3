@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,43 @@
  * limitations under the License.
  */
 
-namespace Thinktecture.IdentityServer.Core.Validation
+namespace IdentityServer3.Core.Validation
 {
+    /// <summary>
+    /// Minimal validation result class (base-class for more complext validation results)
+    /// </summary>
     public class ValidationResult
     {
-        public bool IsError { get; set; }
-        public string Error { get; set; }
-        public ErrorTypes ErrorType { get; set; }
-        
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ValidationResult"/> class.
+        /// </summary>
         public ValidationResult()
         {
             IsError = true;
-            ErrorType = ErrorTypes.User;
         }
-    }
 
-    public enum ErrorTypes
-    {
-        Client,
-        User
+        /// <summary>
+        /// Gets or sets a value indicating whether the validation was successful.
+        /// </summary>
+        /// <value>
+        ///   <c>true</c> if the validation is failed; otherwise, <c>false</c>.
+        /// </value>
+        public bool IsError { get; set; }
+
+        /// <summary>
+        /// Gets or sets the error.
+        /// </summary>
+        /// <value>
+        /// The error.
+        /// </value>
+        public string Error { get; set; }
+
+        /// <summary>
+        /// Gets or sets the error description.
+        /// </summary>
+        /// <value>
+        /// The error description.
+        /// </value>
+        public string ErrorDescription { get; set; }
     }
 }

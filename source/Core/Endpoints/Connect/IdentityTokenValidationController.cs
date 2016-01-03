@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,73 +14,115 @@
  * limitations under the License.
  */
 
-using Newtonsoft.Json;
+using IdentityServer3.Core.Configuration;
+using IdentityServer3.Core.Configuration.Hosting;
+using IdentityServer3.Core.Events;
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Resources;
+using IdentityServer3.Core.Services;
+using IdentityServer3.Core.Validation;
+using System.Collections.Specialized;
 using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web.Http;
-using Thinktecture.IdentityServer.Core.Configuration;
-using Thinktecture.IdentityServer.Core.Configuration.Hosting;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.Resources;
-using Thinktecture.IdentityServer.Core.Validation;
 
-namespace Thinktecture.IdentityServer.Core.Endpoints
+namespace IdentityServer3.Core.Endpoints
 {
-    [RoutePrefix(Constants.RoutePaths.Oidc.IdentityTokenValidation)]
+    /// <summary>
+    /// Endpoint for validating identity tokens
+    /// </summary>
     [NoCache]
-    public class IdentityTokenValidationController : ApiController
+    internal class IdentityTokenValidationController : ApiController
     {
         private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
         private readonly TokenValidator _validator;
         private readonly IdentityServerOptions _options;
+        private readonly ILocalizationService _localizationService;
+        private readonly IEventService _events;
 
-        public IdentityTokenValidationController(TokenValidator validator, IdentityServerOptions options)
+        public IdentityTokenValidationController(TokenValidator validator, IdentityServerOptions options, ILocalizationService localizationService, IEventService events)
         {
             _validator = validator;
             _options = options;
+            _localizationService = localizationService;
+            _events = events;
         }
 
-        [Route]
+        /// <summary>
+        /// GET
+        /// </summary>
+        /// <returns>Claims if token is valid</returns>
+        [HttpGet]
         public async Task<IHttpActionResult> Get()
         {
             Logger.Info("Start identity token validation request");
 
-            if (!_options.Endpoints.IdentityTokenValidationEndpoint.IsEnabled)
-            {
-                Logger.Warn("Endpoint is disabled. Aborting");
-                return NotFound();
-            }
-
             var parameters = Request.RequestUri.ParseQueryString();
+            return await ProcessAsync(parameters);
+        }
 
+        /// <summary>
+        /// POST
+        /// </summary>
+        /// <returns>Claims if token is valid</returns>
+        [HttpPost]
+        public async Task<IHttpActionResult> Post()
+        {
+            Logger.Info("Start identity token validation request");
+
+            var parameters = await Request.GetOwinContext().ReadRequestFormAsNameValueCollectionAsync();
+            return await ProcessAsync(parameters);
+        }
+
+        internal async Task<IHttpActionResult> ProcessAsync(NameValueCollection parameters)
+        {
             var token = parameters.Get("token");
             if (token.IsMissing())
             {
-                Logger.Error("token is missing.");
-                return BadRequest(Messages.MissingToken);
+                var error = "token is missing.";
+                Logger.Error(error);
+                await RaiseFailureEventAsync(error);
+
+                return BadRequest(_localizationService.GetMessage(MessageIds.MissingToken));
             }
 
             var clientId = parameters.Get("client_id");
             if (clientId.IsMissing())
             {
-                Logger.Error("client_id is missing.");
-                return BadRequest(Messages.MissingClientId);
+                var error = "client_id is missing.";
+                Logger.Error(error);
+                await RaiseFailureEventAsync(error);
+
+                return BadRequest(_localizationService.GetMessage(MessageIds.MissingClientId));
             }
 
             var result = await _validator.ValidateIdentityTokenAsync(token, clientId);
-            
+
             if (result.IsError)
             {
                 Logger.Info("Returning error: " + result.Error);
+                await RaiseFailureEventAsync(result.Error);
+
                 return BadRequest(result.Error);
             }
 
             var response = result.Claims.ToClaimsDictionary();
-            Logger.Debug(JsonConvert.SerializeObject(response, Formatting.Indented));
 
-            Logger.Info("Returning identity token claims");
+            Logger.Info("End identity token validation request");
+            await RaiseSuccessEventAsync();
+
             return Json(response);
+        }
+
+        private async Task RaiseSuccessEventAsync()
+        {
+            await _events.RaiseSuccessfulEndpointEventAsync(EventConstants.EndpointNames.IdentityTokenValidation);
+        }
+
+        private async Task RaiseFailureEventAsync(string error)
+        {
+            await _events.RaiseFailureEndpointEventAsync(EventConstants.EndpointNames.IdentityTokenValidation, error);
         }
     }
 }

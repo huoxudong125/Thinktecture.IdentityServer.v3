@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,26 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Models;
+using IdentityServer3.Core.Services;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.Models;
+using System.Threading.Tasks;
 
-namespace Thinktecture.IdentityServer.Core.Validation
+#pragma warning disable 1591
+
+namespace IdentityServer3.Core.Validation
 {
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public class ScopeValidator
     {
         private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
+        
+        private readonly IScopeStore _store;
 
         public bool ContainsOpenIdScopes { get; private set; }
         public bool ContainsResourceScopes { get; private set; }
@@ -34,10 +42,32 @@ namespace Thinktecture.IdentityServer.Core.Validation
         public List<Scope> RequestedScopes { get; private set; }
         public List<Scope> GrantedScopes { get; private set; }
 
-        public ScopeValidator()
+        public ScopeValidator(IScopeStore store)
         {
             RequestedScopes = new List<Scope>();
             GrantedScopes = new List<Scope>();
+
+            _store = store;
+        }
+
+        public static List<string> ParseScopesString(string scopes)
+        {
+            if (scopes.IsMissing())
+            {
+                Logger.Warn("Empty scopes.");
+                return null;
+            }
+
+            scopes = scopes.Trim();
+            var parsedScopes = scopes.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Distinct().ToList();
+
+            if (parsedScopes.Any())
+            {
+                parsedScopes.Sort();
+                return parsedScopes;
+            }
+
+            return null;
         }
 
         public void SetConsentedScopes(IEnumerable<string> consentedScopes)
@@ -47,8 +77,10 @@ namespace Thinktecture.IdentityServer.Core.Validation
             GrantedScopes.RemoveAll(scope => !scope.Required && !consentedScopes.Contains(scope.Name));
         }
 
-        public bool AreScopesValid(IEnumerable<string> requestedScopes, IEnumerable<Scope> availableScopes)
+        public async Task<bool> AreScopesValidAsync(IEnumerable<string> requestedScopes)
         {
+            var availableScopes = await _store.FindScopesAsync(requestedScopes);
+
             foreach (var requestedScope in requestedScopes)
             {
                 var scopeDetail = availableScopes.FirstOrDefault(s => s.Name == requestedScope);
@@ -87,40 +119,16 @@ namespace Thinktecture.IdentityServer.Core.Validation
             return true;
         }
 
-        public List<string> ParseScopes(string scopes)
-        {
-            if (scopes.IsMissing())
-            {
-                return null;
-            }
-
-            Logger.InfoFormat("scopes: {0}", scopes);
-
-            scopes = scopes.Trim();
-            var parsedScopes = scopes.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Distinct().ToList();
-
-            if (parsedScopes.Count > 0)
-            {
-                parsedScopes.Sort();
-                return parsedScopes;
-            }
-
-            return null;
-        }
-
         public bool AreScopesAllowed(Client client, IEnumerable<string> requestedScopes)
         {
-            if (client.ScopeRestrictions == null || client.ScopeRestrictions.Count == 0)
+            if (client.AllowAccessToAllScopes)
             {
-                Logger.Info("All scopes allowed for client");
                 return true;
             }
 
-            Logger.Info("Allowed scopes for client client: " + client.ScopeRestrictions.ToSpaceSeparatedString());
-
             foreach (var scope in requestedScopes)
             {
-                if (!client.ScopeRestrictions.Contains(scope))
+                if (!client.AllowedScopes.Contains(scope))
                 {
                     Logger.ErrorFormat("Requested scope not allowed: {0}", scope);
                     return false;
@@ -163,36 +171,6 @@ namespace Thinktecture.IdentityServer.Core.Validation
                     return false;
                 }
             }
-
-
-            //if (responseType == Constants.ResponseTypes.IdToken)
-            //{
-            //    // must include identity scopes, but no resource scopes
-            //    if (!ContainsOpenIdScopes || ContainsResourceScopes)
-            //    {
-            //        Logger.Error("Requests for id_token or id_token token response types must include identity scopes, but no resource scopes");
-            //        return false;
-            //    }
-
-            //}
-            //else if (responseType == Constants.ResponseTypes.IdTokenToken)
-            //{
-            //    // must include identity scopes
-            //    if (!ContainsOpenIdScopes)
-            //    {
-            //        Logger.Error("Requests for id_token response type must include identity scopes");
-            //        return false;
-            //    }
-            //}
-            //else if (responseType == Constants.ResponseTypes.Token)
-            //{
-            //    // must include resource scopes, but no identity scopes
-            //    if (ContainsOpenIdScopes || !ContainsResourceScopes)
-            //    {
-            //        Logger.Error("Requests for token response type must include resource scopes, but no identity scopes.");
-            //        return false;
-            //    }
-            //}
 
             return true;
         }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,38 @@
  * limitations under the License.
  */
 
+using IdentityModel;
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Models;
 using Microsoft.Owin;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Logging;
+using System.ComponentModel;
+using System.Linq;
+using System.Security.Cryptography;
 
-namespace Thinktecture.IdentityServer.Core.Configuration.Hosting
+#pragma warning disable 1591
+
+namespace IdentityServer3.Core.Configuration.Hosting
 {
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public class MessageCookie<TMessage>
-        where TMessage : class
+        where TMessage : Message
     {
         private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
+
+        static readonly JsonSerializerSettings settings = new JsonSerializerSettings
+        {
+            NullValueHandling = NullValueHandling.Ignore,
+            DefaultValueHandling = DefaultValueHandling.Ignore,
+        };
 
         readonly IOwinContext ctx;
         readonly IdentityServerOptions options;
 
-        public MessageCookie(IDictionary<string, object> env, IdentityServerOptions options)
+        internal MessageCookie(IDictionary<string, object> env, IdentityServerOptions options)
         {
             if (env == null) throw new ArgumentNullException("env");
             if (options == null) throw new ArgumentNullException("options");
@@ -40,7 +54,7 @@ namespace Thinktecture.IdentityServer.Core.Configuration.Hosting
             this.options = options;
         }
 
-        public MessageCookie(IOwinContext ctx, IdentityServerOptions options)
+        internal MessageCookie(IOwinContext ctx, IdentityServerOptions options)
         {
             if (ctx == null) throw new ArgumentNullException("ctx");
             if (options == null) throw new ArgumentNullException("options");
@@ -49,48 +63,42 @@ namespace Thinktecture.IdentityServer.Core.Configuration.Hosting
             this.options = options;
         }
 
-        public string MessageType
+        string MessageType
         {
             get { return typeof(TMessage).Name; }
         }
 
-        public string Protect(IDataProtector protector, TMessage message)
+        string Protect(IDataProtector protector, TMessage message)
         {
-            var settings = new JsonSerializerSettings
-            {
-                NullValueHandling = NullValueHandling.Ignore,
-                DefaultValueHandling = DefaultValueHandling.Ignore,
-            };
-
             var json = JsonConvert.SerializeObject(message, settings);
             Logger.DebugFormat("Protecting message: {0}", json);
 
             return protector.Protect(json, MessageType);
         }
 
-        public TMessage Unprotect(string data, IDataProtector protector)
+        TMessage Unprotect(string data, IDataProtector protector)
         {
             var json = protector.Unprotect(data, MessageType);
             var message = JsonConvert.DeserializeObject<TMessage>(json);
             return message;
         }
 
-        public string GetCookieName(string id = null)
+        string GetCookieName(string id = null)
         {
-            return String.Format("{0}.{1}.{2}", 
+            return String.Format("{0}{1}.{2}", 
                 options.AuthenticationOptions.CookieOptions.Prefix, 
                 MessageType, 
                 id);
         }
         
-        public string CookiePath
+        string CookiePath
         {
             get
             {
-                return ctx.Request.Environment.GetIdentityServerBasePath();
+                return ctx.Request.Environment.GetIdentityServerBasePath().CleanUrlPath();
             }
         }
-        
+
         private IEnumerable<string> GetCookieNames()
         {
             var key = GetCookieName();
@@ -121,15 +129,19 @@ namespace Thinktecture.IdentityServer.Core.Configuration.Hosting
         {
             get
             {
-                return ctx.Request.Scheme == Uri.UriSchemeHttps;
+                return
+                    options.AuthenticationOptions.CookieOptions.SecureMode == CookieSecureMode.Always || 
+                    ctx.Request.Scheme == Uri.UriSchemeHttps;
             }
         }
 
         public string Write(TMessage message)
         {
+            ClearOverflow();
+
             if (message == null) throw new ArgumentNullException("message");
 
-            var id = Guid.NewGuid().ToString("N");
+            var id = CryptoRandom.CreateUniqueId();
             var name = GetCookieName(id);
             var data = Protect(message);
 
@@ -147,7 +159,14 @@ namespace Thinktecture.IdentityServer.Core.Configuration.Hosting
 
         public TMessage Read(string id)
         {
+            if (String.IsNullOrWhiteSpace(id)) return null;
+
             var name = GetCookieName(id);
+            return ReadByCookieName(name);
+        }
+
+        TMessage ReadByCookieName(string name)
+        {
             var data = ctx.Request.Cookies[name];
             if (!String.IsNullOrWhiteSpace(data))
             {
@@ -159,34 +178,63 @@ namespace Thinktecture.IdentityServer.Core.Configuration.Hosting
         public void Clear(string id)
         {
             var name = GetCookieName(id);
+            ClearByCookieName(name);
+        }
 
+        void ClearByCookieName(string name)
+        {
             ctx.Response.Cookies.Append(
                 name,
                 ".",
                 new Microsoft.Owin.CookieOptions
                 {
-                    Expires = DateTime.UtcNow.AddYears(-1),
+                    Expires = DateTimeHelper.UtcNow.AddYears(-1),
                     HttpOnly = true,
                     Secure = Secure,
                     Path = CookiePath
                 });
         }
 
-        public void ClearAll()
+        private long GetCookieRank(string name)
+        {   
+            // empty and invalid cookies are considered to be the oldest:
+            var rank = DateTimeOffset.MinValue.Ticks;
+
+            try
+            {
+                var message = ReadByCookieName(name);
+                if (message != null)
+                {   // valid cookies are ranked based on their creation time:
+                    rank = message.Created;
+                }
+            }
+            catch (CryptographicException e)
+            {   
+                // cookie was protected with a different key/algorithm
+                Logger.DebugFormat("Unable to decrypt cookie {0}: {1}", name, e.Message);
+            }
+            
+            return rank;
+        }
+
+        private void ClearOverflow()
         {
             var names = GetCookieNames();
-            foreach (var name in names)
+            var toKeep = options.AuthenticationOptions.SignInMessageThreshold;
+
+            if (names.Count() >= toKeep)
             {
-                ctx.Response.Cookies.Append(
-                    name,
-                    ".",
-                    new Microsoft.Owin.CookieOptions
-                    {
-                        Expires = DateTime.UtcNow.AddYears(-1),
-                        HttpOnly = true,
-                        Secure = Secure,
-                        Path = CookiePath
-                    });
+                var rankedCookieNames =
+                    from name in names
+                    let rank = GetCookieRank(name)
+                    orderby rank descending
+                    select name;
+
+                var purge = rankedCookieNames.Skip(Math.Max(0, toKeep - 1));
+                foreach (var name in purge)
+                {
+                    ClearByCookieName(name);
+                }
             }
         }
     }

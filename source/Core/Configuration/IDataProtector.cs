@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,27 @@
  * limitations under the License.
  */
 
-namespace Thinktecture.IdentityServer.Core.Configuration
+namespace IdentityServer3.Core.Configuration
 {
+    /// <summary>
+    /// Models protecting data needed by the server (e.g. cookies).
+    /// </summary>
     public interface IDataProtector
     {
+        /// <summary>
+        /// Protects the specified data.
+        /// </summary>
+        /// <param name="data">The data.</param>
+        /// <param name="entropy">The entropy.</param>
+        /// <returns></returns>
+        
         byte[] Protect(byte[] data, string entropy = "");
+        /// <summary>
+        /// Unprotects the specified data.
+        /// </summary>
+        /// <param name="data">The data.</param>
+        /// <param name="entropy">The entropy.</param>
+        /// <returns></returns>
         byte[] Unprotect(byte[] data, string entropy = "");
     }
 }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,15 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Models;
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+namespace IdentityServer3.Core.Services.Default
 {
     /// <summary>
     /// Default consent service
@@ -45,10 +46,17 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
             this._store = store;
         }
 
-        public async Task<bool> RequiresConsentAsync(Client client, ClaimsPrincipal user, IEnumerable<string> scopes)
+        /// <summary>
+        /// Checks if consent is required.
+        /// </summary>
+        /// <param name="client">The client.</param>
+        /// <param name="subject">The user.</param>
+        /// <param name="scopes">The scopes.</param>
+        /// <returns>Boolean if consent is required.</returns>
+        public virtual async Task<bool> RequiresConsentAsync(Client client, ClaimsPrincipal subject, IEnumerable<string> scopes)
         {
             if (client == null) throw new ArgumentNullException("client");
-            if (user == null) throw new ArgumentNullException("user");
+            if (subject == null) throw new ArgumentNullException("subject");
 
             if (!client.RequireConsent)
             {
@@ -65,8 +73,15 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
             {
                 return false;
             }
+
+            // we always require consent for offline access if
+            // the client has not disabled RequireConsent 
+            if (scopes.Contains(Constants.StandardScopes.OfflineAccess))
+            {
+                return true;
+            }
             
-            var consent = await _store.LoadAsync(user.GetSubjectId(), client.ClientId);
+            var consent = await _store.LoadAsync(subject.GetSubjectId(), client.ClientId);
             if (consent != null && consent.Scopes != null)
             {
                 var intersect = scopes.Intersect(consent.Scopes);
@@ -76,21 +91,28 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
             return true;
         }
 
-        public async Task UpdateConsentAsync(Client client, ClaimsPrincipal user, IEnumerable<string> scopes)
+        /// <summary>
+        /// Updates the consent.
+        /// </summary>
+        /// <param name="client">The client.</param>
+        /// <param name="subject">The subject.</param>
+        /// <param name="scopes">The scopes.</param>
+        /// <returns></returns>
+        public virtual async Task UpdateConsentAsync(Client client, ClaimsPrincipal subject, IEnumerable<string> scopes)
         {
             if (client == null) throw new ArgumentNullException("client");
-            if (user == null) throw new ArgumentNullException("user");
+            if (subject == null) throw new ArgumentNullException("subject");
 
             if (client.AllowRememberConsent)
             {
-                var subject = user.GetSubjectId();
+                var subjectId = subject.GetSubjectId();
                 var clientId = client.ClientId;
 
                 if (scopes != null && scopes.Any())
                 {
                     var consent = new Consent
                     {
-                        Subject = subject,
+                        Subject = subjectId,
                         ClientId = clientId,
                         Scopes = scopes
                     };
@@ -98,7 +120,7 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
                 }
                 else
                 {
-                    await _store.RevokeAsync(subject, clientId);
+                    await _store.RevokeAsync(subjectId, clientId);
                 }
             }
         }

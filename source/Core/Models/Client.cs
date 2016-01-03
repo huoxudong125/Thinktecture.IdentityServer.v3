@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Security.Claims;
 
-namespace Thinktecture.IdentityServer.Core.Models
+namespace IdentityServer3.Core.Models
 {
     /// <summary>
     /// Models an OpenID Connect or OAuth2 client
@@ -26,7 +25,7 @@ namespace Thinktecture.IdentityServer.Core.Models
     public class Client
     {
         /// <summary>
-        /// Specifies if client is enabled (defaults to false)
+        /// Specifies if client is enabled (defaults to true)
         /// </summary>
         public bool Enabled { get; set; }
 
@@ -36,9 +35,9 @@ namespace Thinktecture.IdentityServer.Core.Models
         public string ClientId { get; set; }
 
         /// <summary>
-        /// Client secret - only relevant for flows that require a secret
+        /// Client secrets - only relevant for flows that require a secret
         /// </summary>
-        public string ClientSecret { get; set; }
+        public List<Secret> ClientSecrets { get; set; }
 
         /// <summary>
         /// Client display name (used for logging and consent screen)
@@ -53,15 +52,15 @@ namespace Thinktecture.IdentityServer.Core.Models
         /// <summary>
         /// URI to client logo (used on consent screen)
         /// </summary>
-        public Uri LogoUri { get; set; }
+        public string LogoUri { get; set; }
         
         /// <summary>
-        /// Specifies whether a consent screen is required (defaults to false)
+        /// Specifies whether a consent screen is required (defaults to true)
         /// </summary>
         public bool RequireConsent { get; set; }
 
         /// <summary>
-        /// Specifies whether user can choose to store consent decisions (defaults to false)
+        /// Specifies whether user can choose to store consent decisions (defaults to true)
         /// </summary>
         public bool AllowRememberConsent { get; set; }
 
@@ -71,19 +70,47 @@ namespace Thinktecture.IdentityServer.Core.Models
         public Flows Flow { get; set; }
 
         /// <summary>
+        /// Gets or sets a value indicating whether this client is allowed to request token using client credentials only.
+        /// This is e.g. useful when you want a client to be able to use both a user-centric flow like implicit and additionally client credentials flow
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if client credentials flow is allowed; otherwise, <c>false</c>.
+        /// </value>
+        public bool AllowClientCredentialsOnly { get; set; }
+
+        /// <summary>
         /// Specifies allowed URIs to return tokens or authorization codes to
         /// </summary>
-        public List<Uri> RedirectUris { get; set; }
+        public List<string> RedirectUris { get; set; }
 
         /// <summary>
         /// Specifies allowed URIs to redirect to after logout
         /// </summary>
-        public List<Uri> PostLogoutRedirectUris { get; set; }
+        public List<string> PostLogoutRedirectUris { get; set; }
         
         /// <summary>
-        /// Specifies the scopes that the client is allowed to request. If empty, the client can request all scopes (defaults to empty)
+        /// Specifies logout URI at client for HTTP based logout.
         /// </summary>
-        public List<string> ScopeRestrictions { get; set; }
+        public string LogoutUri { get; set; }
+
+        /// <summary>
+        /// Specifies is the user's session id should be sent to the LogoutUri. Defaults to true.
+        /// </summary>
+        public bool LogoutSessionRequired { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the client has access to all scopes. Defaults to false.
+        /// You can set the allowed scopes via the AllowedScopes list.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if client has access to all scopes; otherwise, <c>false</c>.
+        /// </value>
+        public bool AllowAccessToAllScopes { get; set; }
+
+        /// <summary>
+        /// Specifies the scopes that the client is allowed to request. If empty, the client can't access any scope
+        /// </summary>
+        public List<string> AllowedScopes { get; set; }
         
         /// <summary>
         /// Lifetime of identity token in seconds (defaults to 300 seconds / 5 minutes)
@@ -111,21 +138,24 @@ namespace Thinktecture.IdentityServer.Core.Models
         public int SlidingRefreshTokenLifetime { get; set; }
         
         /// <summary>
-        /// Absolute: the refresh token will expire on a fixed point in time (specified by the AbsoluteRefreshTokenLifetime)
-        /// Sliding: when refreshing the token, the lifetime of the refresh token will be renewed (by the amount specified in SlidingRefreshTokenLifetime). The lifetime will not exceed 
+        /// ReUse: the refresh token handle will stay the same when refreshing tokens
+        /// OneTime: the refresh token handle will be updated when refreshing tokens
         /// </summary>
         public TokenUsage RefreshTokenUsage { get; set; }
 
         /// <summary>
-        /// ReUse: the refresh token handle will stay the same when refreshing tokens
-        /// OneTime: the refresh token handle will be updated when refreshing tokens
+        /// Gets or sets a value indicating whether the access token (and its claims) should be updated on a refresh token request.
         /// </summary>
-        public TokenExpiration RefreshTokenExpiration { get; set; }
-        
+        /// <value>
+        /// <c>true</c> if the token should be updated; otherwise, <c>false</c>.
+        /// </value>
+        public bool UpdateAccessTokenClaimsOnRefresh { get; set; }
+
         /// <summary>
-        /// Specifies the key material used to sign the identity token. Default for the primary X.509 certificate, ClientSecret for using the client secret as a symmetric key (must be 256 bits in length). Defaults to Default.
-        /// </summary>
-        public SigningKeyTypes IdentityTokenSigningKeyType { get; set; }
+        /// Absolute: the refresh token will expire on a fixed point in time (specified by the AbsoluteRefreshTokenLifetime)
+        /// Sliding: when refreshing the token, the lifetime of the refresh token will be renewed (by the amount specified in SlidingRefreshTokenLifetime). The lifetime will not exceed AbsoluteRefreshTokenLifetime.
+        /// </summary>        
+        public TokenExpiration RefreshTokenExpiration { get; set; }
         
         /// <summary>
         /// Specifies whether the access token is a reference token or a self contained JWT token (defaults to Jwt).
@@ -133,22 +163,74 @@ namespace Thinktecture.IdentityServer.Core.Models
         public AccessTokenType AccessTokenType { get; set; }
 
         /// <summary>
-        /// Specifies if this client can use local accounts, or external IdPs only
+        /// Gets or sets a value indicating whether the local login is allowed for this client. Defaults to <c>true</c>.
         /// </summary>
-        public bool AllowLocalLogin { get; set; }
+        /// <value>
+        ///   <c>true</c> if local logins are enabled; otherwise, <c>false</c>.
+        /// </value>
+        public bool EnableLocalLogin { get; set; }
         
         /// <summary>
         /// Specifies which external IdPs can be used with this client (if list is empty all IdPs are allowed). Defaults to empty.
         /// </summary>
-        public IEnumerable<string> IdentityProviderRestrictions { get; set; }
+        public List<string> IdentityProviderRestrictions { get; set; }
 
-        // not implemented yet
+        /// <summary>
+        /// Gets or sets a value indicating whether JWT access tokens should include an identifier
+        /// </summary>
+        /// <value>
+        /// <c>true</c> to add an id; otherwise, <c>false</c>.
+        /// </value>
+        public bool IncludeJwtId { get; set; }
 
-        //public bool RefreshClaimsOnRefreshToken { get; set; }
-        //public bool RequireSignedAuthorizeRequest { get; set; }
-        //public SubjectTypes SubjectType { get; set; }
-        //public Uri SectorIdentifierUri { get; set; }
-        //public ApplicationTypes ApplicationType { get; set; }
+        /// <summary>
+        /// Allows settings claims for the client (will be included in the access token).
+        /// </summary>
+        /// <value>
+        /// The claims.
+        /// </value>
+        public List<Claim> Claims { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether client claims should be always included in the access tokens - or only for client credentials flow.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if claims should always be sent; otherwise, <c>false</c>.
+        /// </value>
+        public bool AlwaysSendClientClaims { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether all client claims should be prefixed.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if client claims should be prefixed; otherwise, <c>false</c>.
+        /// </value>
+        public bool PrefixClientClaims { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the client has access to all custom grant types. Defaults to false.
+        /// You can set the allowed custom grant types via the AllowedCustomGrantTypes list.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if client has access to all custom grant types; otherwise, <c>false</c>.
+        /// </value>
+        public bool AllowAccessToAllCustomGrantTypes { get; set; }
+        
+        /// <summary>
+        /// Gets or sets a list of allowed custom grant types when Flow is set to Custom.
+        /// </summary>
+        /// <value>
+        /// The allowed custom grant types.
+        /// </value>
+        public List<string> AllowedCustomGrantTypes { get; set; }
+
+        /// <summary>
+        /// Gets or sets the allowed CORS origins for JavaScript clients.
+        /// </summary>
+        /// <value>
+        /// The allowed CORS origins.
+        /// </value>
+        public List<string> AllowedCorsOrigins { get; set; }
 
         /// <summary>
         /// Creates a Client with default values
@@ -156,9 +238,26 @@ namespace Thinktecture.IdentityServer.Core.Models
         public Client()
         {
             Flow = Flows.Implicit;
-            ScopeRestrictions = new List<string>();
-            RedirectUris = new List<Uri>();
-            PostLogoutRedirectUris = new List<Uri>();
+            
+            ClientSecrets = new List<Secret>();
+            AllowedScopes = new List<string>();
+            RedirectUris = new List<string>();
+            PostLogoutRedirectUris = new List<string>();
+            IdentityProviderRestrictions = new List<string>();
+            AllowedCustomGrantTypes = new List<string>();
+            AllowedCorsOrigins = new List<string>();
+
+            LogoutSessionRequired = true;
+
+            Enabled = true;
+            EnableLocalLogin = true;
+            AllowAccessToAllScopes = false;
+            AllowAccessToAllCustomGrantTypes = false;
+
+            // client claims settings
+            Claims = new List<Claim>();
+            AlwaysSendClientClaims = false;
+            PrefixClientClaims = true;
             
             // 5 minutes
             AuthorizationCodeLifetime = 300;
@@ -176,11 +275,10 @@ namespace Thinktecture.IdentityServer.Core.Models
             RefreshTokenUsage = TokenUsage.OneTimeOnly;
             RefreshTokenExpiration = TokenExpiration.Absolute;
 
-            IdentityTokenSigningKeyType = SigningKeyTypes.Default;
             AccessTokenType = AccessTokenType.Jwt;
-
-            IdentityProviderRestrictions = Enumerable.Empty<string>();
-            AllowLocalLogin = true;
+            
+            RequireConsent = true;
+            AllowRememberConsent = true;
         }
     }
 }

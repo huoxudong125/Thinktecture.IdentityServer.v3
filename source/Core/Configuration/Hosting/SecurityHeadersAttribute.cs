@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-using Autofac;
+using IdentityServer3.Core.Extensions;
 using System;
+using System.Linq;
 using System.Net.Http;
 using System.Web.Http.Filters;
-using Thinktecture.IdentityServer.Core.Extensions;
 
-namespace Thinktecture.IdentityServer.Core.Configuration.Hosting
+namespace IdentityServer3.Core.Configuration.Hosting
 {
     internal class SecurityHeadersAttribute : ActionFilterAttribute
     {
@@ -38,6 +38,7 @@ namespace Thinktecture.IdentityServer.Core.Configuration.Hosting
         public override void OnActionExecuted(HttpActionExecutedContext actionExecutedContext)
         {
             base.OnActionExecuted(actionExecutedContext);
+
             if (actionExecutedContext != null &&
                 actionExecutedContext.Response != null &&
                 actionExecutedContext.Response.IsSuccessStatusCode &&
@@ -50,7 +51,7 @@ namespace Thinktecture.IdentityServer.Core.Configuration.Hosting
                     actionExecutedContext.Response.Headers.Add("X-Content-Type-Options", "nosniff");
                 }
 
-                if (EnableXfo)
+                if (EnableXfo && actionExecutedContext.Request.GetSuppressXfo() == false)
                 {
                     actionExecutedContext.Response.Headers.Add("X-Frame-Options", "SAMEORIGIN");
                 }
@@ -58,24 +59,37 @@ namespace Thinktecture.IdentityServer.Core.Configuration.Hosting
                 if (EnableCsp)
                 {
                     var ctx = actionExecutedContext.Request.GetOwinContext();
-                    var scope = ctx.Environment.GetLifetimeScope();
-                    var options = (IdentityServerOptions)scope.ResolveOptional(typeof(IdentityServerOptions));
+                    var options = ctx.ResolveDependency<IdentityServerOptions>();
                     if (options.CspOptions.Enabled)
                     {
-                        var value = "default-src 'self'; script-src 'self' {0}; style-src 'self' 'unsafe-inline' {1}; img-src *;";
-                        
+                        // img-src as * due to client logos
+                        var value = "default-src 'self'; script-src 'self' {0}; style-src 'self' 'unsafe-inline' {1}; img-src {2}; ";
+
                         if (!String.IsNullOrWhiteSpace(options.CspOptions.FontSrc))
                         {
                             value += String.Format("font-src {0};", options.CspOptions.FontSrc);
                         }
-
-                        value = String.Format(value, options.CspOptions.ScriptSrc, options.CspOptions.StyleSrc);
-                        if (options.CspOptions.ReportEndpoint.IsEnabled)
+                        if (!String.IsNullOrWhiteSpace(options.CspOptions.ConnectSrc))
                         {
-                            var cspReportUrl = actionExecutedContext.ActionContext.RequestContext.Url.Link(Constants.RouteNames.CspReport, null);
-                            value += " report-uri " + cspReportUrl;
+                            value += String.Format("connect-src {0};", options.CspOptions.ConnectSrc);
                         }
+
+                        var iframesOrigins = actionExecutedContext.Request.GetAllowedCspFrameOrigins();
+                        if (iframesOrigins.Any())
+                        {
+                            var frameSrc = iframesOrigins.Aggregate((x, y) => x + " " + y);
+                            value += String.Format("frame-src {0};", frameSrc);
+                        }
+
+                        value = String.Format(value, options.CspOptions.ScriptSrc, options.CspOptions.StyleSrc, options.CspOptions.ImgSrc ?? "*");
+                        if (options.Endpoints.EnableCspReportEndpoint)
+                        {
+                            value += " report-uri " + ctx.GetCspReportUrl();
+                        }
+                        // once for standards compliant browsers
                         actionExecutedContext.Response.Headers.Add("Content-Security-Policy", value);
+                        // and once again for IE
+                        actionExecutedContext.Response.Headers.Add("X-Content-Security-Policy", value);
                     }
                 }
             }

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Models;
+using IdentityServer3.Core.Validation;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.Models;
-using Thinktecture.IdentityServer.Core.Validation;
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+namespace IdentityServer3.Core.Services.Default
 {
     /// <summary>
     /// Default claims provider implementation
@@ -33,7 +33,7 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         /// <summary>
         /// The logger
         /// </summary>
-        protected readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
+        private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
 
         /// <summary>
         /// The user service
@@ -62,15 +62,26 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         /// </returns>
         public virtual async Task<IEnumerable<Claim>> GetIdentityTokenClaimsAsync(ClaimsPrincipal subject, Client client, IEnumerable<Scope> scopes, bool includeAllIdentityClaims, ValidatedRequest request)
         {
-            Logger.Debug("Getting claims for identity token");
+            Logger.Info("Getting claims for identity token for subject: " + subject.GetSubjectId());
 
             var outputClaims = new List<Claim>(GetStandardSubjectClaims(subject));
+            outputClaims.AddRange(GetOptionalClaims(subject));
+            
             var additionalClaims = new List<string>();
 
             // if a include all claims rule exists, call the user service without a claims filter
             if (scopes.IncludesAllClaimsForUserRule(ScopeType.Identity))
             {
-                var claims = await _users.GetProfileDataAsync(subject);
+                Logger.Info("All claims rule found - emitting all claims for user.");
+
+                var context = new ProfileDataRequestContext(
+                    subject,
+                    client,
+                    Constants.ProfileDataCallers.ClaimsProviderIdentityToken);
+
+                await _users.GetProfileDataAsync(context);
+                
+                var claims = FilterProtocolClaims(context.IssuedClaims);
                 if (claims != null)
                 {
                     outputClaims.AddRange(claims);
@@ -96,7 +107,15 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
 
             if (additionalClaims.Count > 0)
             {
-                var claims = await _users.GetProfileDataAsync(subject, additionalClaims);
+                var context = new ProfileDataRequestContext(
+                    subject,
+                    client,
+                    Constants.ProfileDataCallers.ClaimsProviderIdentityToken,
+                    additionalClaims);
+                
+                await _users.GetProfileDataAsync(context);
+
+                var claims = FilterProtocolClaims(context.IssuedClaims);
                 if (claims != null)
                 {
                     outputClaims.AddRange(claims);
@@ -118,26 +137,54 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         /// </returns>
         public virtual async Task<IEnumerable<Claim>> GetAccessTokenClaimsAsync(ClaimsPrincipal subject, Client client, IEnumerable<Scope> scopes, ValidatedRequest request)
         {
-            Logger.Debug("Getting claims for access token");
-
+            // add client_id
             var outputClaims = new List<Claim>
             {
                 new Claim(Constants.ClaimTypes.ClientId, client.ClientId),
             };
 
+            // check for client claims
+            if (client.Claims != null && client.Claims.Any())
+            {
+                if (subject == null || client.AlwaysSendClientClaims)
+                {
+                    foreach (var claim in client.Claims)
+                    {
+                        var claimType = claim.Type;
+
+                        if (client.PrefixClientClaims)
+                        {
+                            claimType = "client_" + claimType;
+                        }
+
+                        outputClaims.Add(new Claim(claimType, claim.Value, claim.ValueType));
+                    }
+                }
+            }
+
+            // add scopes
             foreach (var scope in scopes)
             {
                 outputClaims.Add(new Claim(Constants.ClaimTypes.Scope, scope.Name));
             }
 
+            // a user is involved
             if (subject != null)
             {
                 outputClaims.AddRange(GetStandardSubjectClaims(subject));
+                outputClaims.AddRange(GetOptionalClaims(subject));
 
                 // if a include all claims rule exists, call the user service without a claims filter
                 if (scopes.IncludesAllClaimsForUserRule(ScopeType.Resource))
                 {
-                    var claims = await _users.GetProfileDataAsync(subject);
+                    var context = new ProfileDataRequestContext(
+                    subject,
+                    client,
+                    Constants.ProfileDataCallers.ClaimsProviderAccessToken);
+
+                    await _users.GetProfileDataAsync(context);
+
+                    var claims = FilterProtocolClaims(context.IssuedClaims);
                     if (claims != null)
                     {
                         outputClaims.AddRange(claims);
@@ -147,7 +194,7 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
                 }
 
 
-                // fetch all resource claims that need to go into the id token
+                // fetch all resource claims that need to go into the access token
                 var additionalClaims = new List<string>();
                 foreach (var scope in scopes)
                 {
@@ -165,7 +212,15 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
 
                 if (additionalClaims.Count > 0)
                 {
-                    var claims = await _users.GetProfileDataAsync(subject, additionalClaims.Distinct());
+                    var context = new ProfileDataRequestContext(
+                    subject,
+                    client,
+                    Constants.ProfileDataCallers.ClaimsProviderAccessToken,
+                    additionalClaims.Distinct());
+
+                    await _users.GetProfileDataAsync(context);
+
+                    var claims = FilterProtocolClaims(context.IssuedClaims);
                     if (claims != null)
                     {
                         outputClaims.AddRange(claims);
@@ -185,13 +240,39 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         {
             var claims = new List<Claim>
             {
-                subject.FindFirst(Constants.ClaimTypes.Subject),
-                subject.FindFirst(Constants.ClaimTypes.AuthenticationMethod),
-                subject.FindFirst(Constants.ClaimTypes.AuthenticationTime),
-                subject.FindFirst(Constants.ClaimTypes.IdentityProvider),
+                new Claim(Constants.ClaimTypes.Subject, subject.GetSubjectId()),
+                new Claim(Constants.ClaimTypes.AuthenticationTime, subject.GetAuthenticationTimeEpoch().ToString(), ClaimValueTypes.Integer),
+                new Claim(Constants.ClaimTypes.IdentityProvider, subject.GetIdentityProvider()),
             };
+
+            claims.AddRange(subject.GetAuthenticationMethods());
 
             return claims;
         }
-    }
+
+        /// <summary>
+        /// Gets additional (and optional) claims from the cookie or incoming subject.
+        /// </summary>
+        /// <param name="subject">The subject.</param>
+        /// <returns>Additional claims</returns>
+        protected virtual IEnumerable<Claim> GetOptionalClaims(ClaimsPrincipal subject)
+        {
+            var claims = new List<Claim>();
+
+            var acr = subject.FindFirst(Constants.ClaimTypes.AuthenticationContextClassReference);
+            if (acr.HasValue()) claims.Add(acr);
+
+            return claims;
+        }
+
+        /// <summary>
+        /// Filters out protocol claims like amr, nonce etc..
+        /// </summary>
+        /// <param name="claims">The claims.</param>
+        /// <returns></returns>
+        protected virtual IEnumerable<Claim> FilterProtocolClaims(IEnumerable<Claim> claims)
+        {
+            return claims.Where(x => !Constants.ClaimsProviderFilerClaimTypes.Contains(x.Type));
+        }
+     }
 }

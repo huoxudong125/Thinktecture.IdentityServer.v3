@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,35 @@
  * limitations under the License.
  */
 
-using System.ComponentModel.DataAnnotations;
-
-namespace Thinktecture.IdentityServer.Core.ViewModels
+namespace IdentityServer3.Core.ViewModels
 {
+    /// <summary>
+    /// Models the inputs to be submitted to the local login endpoint.
+    /// </summary>
     public class LoginCredentials
     {
-        [Required(ErrorMessageResourceType=typeof(Resources.Messages), ErrorMessageResourceName="UsernameRequired")]
+        /// <summary>
+        /// Gets or sets the username.
+        /// </summary>
+        /// <value>
+        /// The username.
+        /// </value>
         public string Username { get; set; }
-        [Required(ErrorMessageResourceType = typeof(Resources.Messages), ErrorMessageResourceName = "PasswordRequired")]
+        
+        /// <summary>
+        /// Gets or sets the password.
+        /// </summary>
+        /// <value>
+        /// The password.
+        /// </value>
         public string Password { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the remember me.
+        /// </summary>
+        /// <value>
+        /// The remember me.
+        /// </value>
         public bool? RememberMe { get; set; }
     }
 }

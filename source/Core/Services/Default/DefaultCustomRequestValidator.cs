@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Validation;
 using System.Threading.Tasks;
-using Thinktecture.IdentityServer.Core.Validation;
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+namespace IdentityServer3.Core.Services.Default
 {
     /// <summary>
     /// Default custom request validator
@@ -31,9 +31,9 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         /// <returns>
         /// The validation result
         /// </returns>
-        public Task<ValidationResult> ValidateAuthorizeRequestAsync(ValidatedAuthorizeRequest request)
+        public Task<AuthorizeRequestValidationResult> ValidateAuthorizeRequestAsync(ValidatedAuthorizeRequest request)
         {
-            return Task.FromResult(new ValidationResult
+            return Task.FromResult(new AuthorizeRequestValidationResult
             {
                 IsError = false
             });
@@ -46,9 +46,9 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         /// <returns>
         /// The validation result
         /// </returns>
-        public Task<ValidationResult> ValidateTokenRequestAsync(ValidatedTokenRequest request)
+        public Task<TokenRequestValidationResult> ValidateTokenRequestAsync(ValidatedTokenRequest request)
         {
-            return Task.FromResult(new ValidationResult
+            return Task.FromResult(new TokenRequestValidationResult
             {
                 IsError = false
             });

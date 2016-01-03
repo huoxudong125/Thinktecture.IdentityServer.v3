@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,31 +14,35 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Configuration;
+using IdentityServer3.Core.Configuration.Hosting;
+using IdentityServer3.Core.Events;
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Models;
+using IdentityServer3.Core.ResponseHandling;
+using IdentityServer3.Core.Results;
+using IdentityServer3.Core.Services;
+using IdentityServer3.Core.Validation;
+using IdentityServer3.Core.ViewModels;
 using System;
 using System.Collections.Specialized;
 using System.Net.Http;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Web.Http;
-using Thinktecture.IdentityServer.Core.Configuration;
-using Thinktecture.IdentityServer.Core.Configuration.Hosting;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.Models;
-using Thinktecture.IdentityServer.Core.ResponseHandling;
-using Thinktecture.IdentityServer.Core.Results;
-using Thinktecture.IdentityServer.Core.Services;
-using Thinktecture.IdentityServer.Core.Validation;
-using Thinktecture.IdentityServer.Core.ViewModels;
 
-namespace Thinktecture.IdentityServer.Core.Endpoints
+namespace IdentityServer3.Core.Endpoints
 {
+    /// <summary>
+    /// OAuth2/OpenID Connect authorize endpoint
+    /// </summary>
     [ErrorPageFilter]
     [HostAuthentication(Constants.PrimaryAuthenticationType)]
     [SecurityHeaders]
     [NoCache]
     [PreventUnsupportedRequestMediaTypes(allowFormUrlEncoded: true)]
-    public class AuthorizeEndpointController : ApiController
+    internal class AuthorizeEndpointController : ApiController
     {
         private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
 
@@ -47,13 +51,33 @@ namespace Thinktecture.IdentityServer.Core.Endpoints
         private readonly AuthorizeResponseGenerator _responseGenerator;
         private readonly AuthorizeInteractionResponseGenerator _interactionGenerator;
         private readonly IdentityServerOptions _options;
+        private readonly ILocalizationService _localizationService;
+        private readonly IEventService _events;
+        private readonly AntiForgeryToken _antiForgeryToken;
+        private readonly ClientListCookie _clientListCookie;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="AuthorizeEndpointController" /> class.
+        /// </summary>
+        /// <param name="viewService">The view service.</param>
+        /// <param name="validator">The validator.</param>
+        /// <param name="responseGenerator">The response generator.</param>
+        /// <param name="interactionGenerator">The interaction generator.</param>
+        /// <param name="options">The options.</param>
+        /// <param name="localizationService">The localization service.</param>
+        /// <param name="events">The event service.</param>
+        /// <param name="antiForgeryToken">The anti forgery token.</param>
+        /// <param name="clientListCookie">The client list cookie.</param>
         public AuthorizeEndpointController(
             IViewService viewService,
             AuthorizeRequestValidator validator,
             AuthorizeResponseGenerator responseGenerator,
             AuthorizeInteractionResponseGenerator interactionGenerator,
-            IdentityServerOptions options)
+            IdentityServerOptions options,
+            ILocalizationService localizationService,
+            IEventService events,
+            AntiForgeryToken antiForgeryToken,
+            ClientListCookie clientListCookie)
         {
             _viewService = viewService;
             _options = options;
@@ -61,45 +85,50 @@ namespace Thinktecture.IdentityServer.Core.Endpoints
             _responseGenerator = responseGenerator;
             _interactionGenerator = interactionGenerator;
             _validator = validator;
+            _localizationService = localizationService;
+            _events = events;
+            _antiForgeryToken = antiForgeryToken;
+            _clientListCookie = clientListCookie;
         }
 
-        [Route(Constants.RoutePaths.Oidc.Authorize, Name = Constants.RouteNames.Oidc.Authorize)]
+        /// <summary>
+        /// GET
+        /// </summary>
+        /// <param name="request">The request.</param>
+        /// <returns></returns>
+        [HttpGet]
         public async Task<IHttpActionResult> Get(HttpRequestMessage request)
         {
             Logger.Info("Start authorize request");
 
-            return await ProcessRequestAsync(request.RequestUri.ParseQueryString());
+            var response = await ProcessRequestAsync(request.RequestUri.ParseQueryString());
+
+            Logger.Info("End authorize request");
+            return response;
         }
 
-        protected async Task<IHttpActionResult> ProcessRequestAsync(NameValueCollection parameters, UserConsent consent = null)
+        private async Task<IHttpActionResult> ProcessRequestAsync(NameValueCollection parameters, UserConsent consent = null)
         {
-            if (!_options.Endpoints.AuthorizeEndpoint.IsEnabled)
-            {
-                Logger.Warn("Endpoint is disabled. Aborting");
-                return NotFound();
-            }
-
-            ///////////////////////////////////////////////////////////////
-            // validate protocol parameters
-            //////////////////////////////////////////////////////////////
-            var result = _validator.ValidateProtocol(parameters);
-            var request = _validator.ValidatedRequest;
-
+            // validate request
+            var result = await _validator.ValidateAsync(parameters, User as ClaimsPrincipal);
+            
             if (result.IsError)
             {
-                return this.AuthorizeError(
+                return await this.AuthorizeErrorAsync(
                     result.ErrorType,
                     result.Error,
-                    request.ResponseMode,
-                    request.RedirectUri,
-                    request.State);
+                    result.ValidatedRequest);
             }
 
+            var request = result.ValidatedRequest;
             var loginInteraction = await _interactionGenerator.ProcessLoginAsync(request, User as ClaimsPrincipal);
 
             if (loginInteraction.IsError)
             {
-                return this.AuthorizeError(loginInteraction.Error);
+                return await this.AuthorizeErrorAsync(
+                    loginInteraction.Error.ErrorType,
+                    loginInteraction.Error.Error,
+                    request);
             }
             if (loginInteraction.IsLogin)
             {
@@ -114,21 +143,6 @@ namespace Thinktecture.IdentityServer.Core.Endpoints
 
             request.Subject = User as ClaimsPrincipal;
 
-            ///////////////////////////////////////////////////////////////
-            // validate client
-            //////////////////////////////////////////////////////////////
-            result = await _validator.ValidateClientAsync();
-
-            if (result.IsError)
-            {
-                return this.AuthorizeError(
-                    result.ErrorType,
-                    result.Error,
-                    request.ResponseMode,
-                    request.RedirectUri,
-                    request.State);
-            }
-
             // now that client configuration is loaded, we can do further validation
             loginInteraction = await _interactionGenerator.ProcessClientLoginAsync(request);
             if (loginInteraction.IsLogin)
@@ -140,7 +154,10 @@ namespace Thinktecture.IdentityServer.Core.Endpoints
 
             if (consentInteraction.IsError)
             {
-                return this.AuthorizeError(consentInteraction.Error);
+                return await this.AuthorizeErrorAsync(
+                    consentInteraction.Error.ErrorType,
+                    consentInteraction.Error.Error,
+                    request);
             }
 
             if (consentInteraction.IsConsent)
@@ -152,7 +169,6 @@ namespace Thinktecture.IdentityServer.Core.Endpoints
             return await CreateAuthorizeResponseAsync(request);
         }
 
-        [Route(Constants.RoutePaths.Oidc.Consent, Name = Constants.RouteNames.Oidc.Consent)]
         [HttpPost]
         [ValidateAntiForgeryToken]
         public Task<IHttpActionResult> PostConsent(UserConsent model)
@@ -161,7 +177,6 @@ namespace Thinktecture.IdentityServer.Core.Endpoints
             return ProcessRequestAsync(Request.RequestUri.ParseQueryString(), model ?? new UserConsent());
         }
 
-        [Route(Constants.RoutePaths.Oidc.SwitchUser, Name = Constants.RouteNames.Oidc.SwitchUser)]
         [HttpGet]
         public async Task<IHttpActionResult> LoginAsDifferentUser()
         {
@@ -177,11 +192,19 @@ namespace Thinktecture.IdentityServer.Core.Endpoints
             if (request.ResponseMode == Constants.ResponseModes.Query ||
                 request.ResponseMode == Constants.ResponseModes.Fragment)
             {
-                return new AuthorizeRedirectResult(response);
+                Logger.DebugFormat("Adding client {0} to client list cookie for subject {1}", request.ClientId, request.Subject.GetSubjectId());
+                _clientListCookie.AddClient(request.ClientId);
+
+                await RaiseSuccessEventAsync();
+                return new AuthorizeRedirectResult(response, _options);
             }
 
             if (request.ResponseMode == Constants.ResponseModes.FormPost)
             {
+                Logger.DebugFormat("Adding client {0} to client list cookie for subject {1}", request.ClientId, request.Subject.GetSubjectId());
+                _clientListCookie.AddClient(request.ClientId);
+
+                await RaiseSuccessEventAsync();
                 return new AuthorizeFormPostResult(response, Request);
             }
 
@@ -195,26 +218,35 @@ namespace Thinktecture.IdentityServer.Core.Endpoints
             NameValueCollection requestParameters,
             string errorMessage)
         {
+            string loginWithDifferentAccountUrl = null;
+            if (validatedRequest.HasIdpAcrValue() == false)
+            {
+                loginWithDifferentAccountUrl = Url.Route(Constants.RouteNames.Oidc.SwitchUser, null)
+                    .AddQueryString(requestParameters.ToQueryString());
+            }
+            
             var env = Request.GetOwinEnvironment();
             var consentModel = new ConsentViewModel
             {
+                RequestId = env.GetRequestId(),
                 SiteName = _options.SiteName,
                 SiteUrl = env.GetIdentityServerBaseUrl(),
                 ErrorMessage = errorMessage,
-                CurrentUser = User.GetName(),
+                CurrentUser = env.GetCurrentUserDisplayName(),
+                LogoutUrl = env.GetIdentityServerLogoutUrl(),
                 ClientName = validatedRequest.Client.ClientName,
                 ClientUrl = validatedRequest.Client.ClientUri,
-                ClientLogoUrl = validatedRequest.Client.LogoUri != null ? validatedRequest.Client.LogoUri.AbsoluteUri : null,
-                IdentityScopes = validatedRequest.GetIdentityScopes(),
-                ResourceScopes = validatedRequest.GetResourceScopes(),
+                ClientLogoUrl = validatedRequest.Client.LogoUri,
+                IdentityScopes = validatedRequest.GetIdentityScopes(this._localizationService),
+                ResourceScopes = validatedRequest.GetResourceScopes(this._localizationService),
                 AllowRememberConsent = validatedRequest.Client.AllowRememberConsent,
-                RememberConsent = consent != null ? consent.RememberConsent : true,
-                LoginWithDifferentAccountUrl = Url.Route(Constants.RouteNames.Oidc.SwitchUser, null).AddQueryString(requestParameters.ToQueryString()),
-                LogoutUrl = Url.Route(Constants.RouteNames.Oidc.EndSession, null),
+                RememberConsent = consent == null || consent.RememberConsent,
+                LoginWithDifferentAccountUrl = loginWithDifferentAccountUrl,
                 ConsentUrl = Url.Route(Constants.RouteNames.Oidc.Consent, null).AddQueryString(requestParameters.ToQueryString()),
-                AntiForgery = AntiForgeryTokenValidator.GetAntiForgeryHiddenInput(Request.GetOwinEnvironment())
+                AntiForgery = _antiForgeryToken.GetAntiForgeryToken()
             };
-            return new ConsentActionResult(_viewService, env, consentModel);
+
+            return new ConsentActionResult(_viewService, consentModel, validatedRequest);
         }
 
         IHttpActionResult RedirectToLogin(SignInMessage message, NameValueCollection parameters)
@@ -222,69 +254,69 @@ namespace Thinktecture.IdentityServer.Core.Endpoints
             message = message ?? new SignInMessage();
 
             var path = Url.Route(Constants.RouteNames.Oidc.Authorize, null).AddQueryString(parameters.ToQueryString());
-            var url = new Uri(Request.RequestUri, path);
+            var host = new Uri(Request.GetOwinEnvironment().GetIdentityServerHost());
+            var url = new Uri(host, path);
             message.ReturnUrl = url.AbsoluteUri;
 
-            return new LoginResult(message, Request.GetOwinContext().Environment, _options);
+            return new LoginResult(Request.GetOwinContext().Environment, message);
         }
 
-        IHttpActionResult AuthorizeError(ErrorTypes errorType, string error, string responseMode, Uri errorUri, string state)
+        async Task<IHttpActionResult> AuthorizeErrorAsync(ErrorTypes errorType, string error, ValidatedAuthorizeRequest request)
         {
-            return AuthorizeError(new AuthorizeError
-            {
-                ErrorType = errorType,
-                Error = error,
-                ResponseMode = responseMode,
-                ErrorUri = errorUri,
-                State = state
-            });
-        }
+            await RaiseFailureEventAsync(error);
 
-        IHttpActionResult AuthorizeError(AuthorizeError error)
-        {
-            if (error.ErrorType == ErrorTypes.User)
+            // show error message to user
+            if (errorType == ErrorTypes.User)
             {
                 var env = Request.GetOwinEnvironment();
                 var errorModel = new ErrorViewModel
                 {
+                    RequestId = env.GetRequestId(),
                     SiteName = _options.SiteName,
                     SiteUrl = env.GetIdentityServerBaseUrl(),
-                    CurrentUser = User.GetName(),
-                    ErrorMessage = LookupErrorMessage(error.Error)
+                    CurrentUser = env.GetCurrentUserDisplayName(),
+                    LogoutUrl = env.GetIdentityServerLogoutUrl(),
+                    ErrorMessage = LookupErrorMessage(error)
                 };
-                var errorResult = new ErrorActionResult(_viewService, env, errorModel);
+
+                var errorResult = new ErrorActionResult(_viewService, errorModel);
                 return errorResult;
             }
 
-            var query = new NameValueCollection
+            // return error to client
+            var response = new AuthorizeResponse
             {
-                {"error", error.Error}
+                Request = request,
+
+                IsError = true,
+                Error = error,
+                State = request.State,
+                RedirectUri = request.RedirectUri
             };
 
-            if (error.State.IsPresent())
+            if (request.ResponseMode == Constants.ResponseModes.FormPost)
             {
-                query.Add("state", error.State);
-            }
-
-            var url = error.ErrorUri.AbsoluteUri;
-            if (error.ResponseMode == Constants.ResponseModes.Query ||
-                error.ResponseMode == Constants.ResponseModes.FormPost)
-            {
-                url = url.AddQueryString(query.ToQueryString());
+                return new AuthorizeFormPostResult(response, Request);
             }
             else
             {
-                url = url.AddHashFragment(query.ToQueryString());
+                return new AuthorizeRedirectResult(response, _options);
             }
+        }
 
-            Logger.Info("Redirecting to: " + url);
+        private async Task RaiseSuccessEventAsync()
+        {
+            await _events.RaiseSuccessfulEndpointEventAsync(EventConstants.EndpointNames.Authorize);
+        }
 
-            return Redirect(url);
+        private async Task RaiseFailureEventAsync(string error)
+        {
+            await _events.RaiseFailureEndpointEventAsync(EventConstants.EndpointNames.Authorize, error);
         }
 
         private string LookupErrorMessage(string error)
         {
-            var msg = Resources.Messages.ResourceManager.GetString(error);
+            var msg = _localizationService.GetMessage(error);
             if (msg.IsMissing())
             {
                 msg = error;

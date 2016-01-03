@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,13 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Thinktecture.IdentityServer.Core.Models
+namespace IdentityServer3.Core.Models
 {
+    /// <summary>
+    /// Convenience class that defines standard identity scopes.
+    /// </summary>
     public static class StandardScopes
     {
+        /// <summary>
+        /// All identity scopes.
+        /// </summary>
+        /// <value>
+        /// All.
+        /// </value>
         public static IEnumerable<Scope> All
         {
             get
@@ -35,6 +45,34 @@ namespace Thinktecture.IdentityServer.Core.Models
             }
         }
 
+        /// <summary>
+        /// All identity scopes (always include claims in token).
+        /// </summary>
+        /// <value>
+        /// All always include.
+        /// </value>
+        public static IEnumerable<Scope> AllAlwaysInclude
+        {
+            get
+            {
+                return new[]
+                {
+                    OpenId,
+                    ProfileAlwaysInclude,
+                    EmailAlwaysInclude,
+                    PhoneAlwaysInclude,
+                    AddressAlwaysInclude
+                };
+            }
+        }
+
+
+        /// <summary>
+        /// Gets the "openid" scope.
+        /// </summary>
+        /// <value>
+        /// The open identifier.
+        /// </value>
         public static Scope OpenId
         {
             get
@@ -42,7 +80,6 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.OpenId,
-                    DisplayName = Resources.Scopes.OpenIdDisplayName,
                     Required = true,
                     Type = ScopeType.Identity,
                     Claims = new List<ScopeClaim>
@@ -53,6 +90,12 @@ namespace Thinktecture.IdentityServer.Core.Models
             }
         }
 
+        /// <summary>
+        /// Gets the "profile" scope.
+        /// </summary>
+        /// <value>
+        /// The profile.
+        /// </value>
         public static Scope Profile
         {
             get
@@ -60,15 +103,19 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.Profile,
-                    DisplayName = Resources.Scopes.ProfileDisplayName,
-                    Description = Resources.Scopes.ProfileDescription,
                     Type = ScopeType.Identity,
                     Emphasize = true,
-                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Profile].Select(claim => new ScopeClaim(claim)))
+                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Profile].Select(claim => new ScopeClaim(claim)).ToList())
                 };
             }
         }
 
+        /// <summary>
+        /// Gets the "profile" scope (always include claims in token).
+        /// </summary>
+        /// <value>
+        /// The profile always include.
+        /// </value>
         public static Scope ProfileAlwaysInclude
         {
             get
@@ -76,15 +123,19 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.Profile,
-                    DisplayName = Resources.Scopes.ProfileDisplayName,
-                    Description = Resources.Scopes.ProfileDescription,
                     Type = ScopeType.Identity,
                     Emphasize = true,
-                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Profile].Select(claim => new ScopeClaim(claim, alwaysInclude: true)))
+                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Profile].Select(claim => new ScopeClaim(claim, alwaysInclude: true)).ToList())
                 };
             }
         }
 
+        /// <summary>
+        /// Gets the "email" scope.
+        /// </summary>
+        /// <value>
+        /// The email.
+        /// </value>
         public static Scope Email
         {
             get
@@ -92,14 +143,19 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.Email,
-                    DisplayName = Resources.Scopes.EmailDisplayName,
                     Type = ScopeType.Identity,
                     Emphasize = true,
-                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Email].Select(claim => new ScopeClaim(claim)))
+                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Email].Select(claim => new ScopeClaim(claim)).ToList())
                 };
             }
         }
 
+        /// <summary>
+        /// Gets the "email" scope (always include claims in token).
+        /// </summary>
+        /// <value>
+        /// The email always include.
+        /// </value>
         public static Scope EmailAlwaysInclude
         {
             get
@@ -107,14 +163,19 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.Email,
-                    DisplayName = Resources.Scopes.EmailDisplayName,
                     Type = ScopeType.Identity,
                     Emphasize = true,
-                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Email].Select(claim => new ScopeClaim(claim, alwaysInclude: true)))
+                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Email].Select(claim => new ScopeClaim(claim, alwaysInclude: true)).ToList())
                 };
             }
         }
 
+        /// <summary>
+        /// Gets the "phone" scope.
+        /// </summary>
+        /// <value>
+        /// The phone.
+        /// </value>
         public static Scope Phone
         {
             get
@@ -122,14 +183,19 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.Phone,
-                    DisplayName = Resources.Scopes.ProfileDisplayName,
                     Type = ScopeType.Identity,
                     Emphasize = true,
-                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Phone].Select(claim => new ScopeClaim(claim)))
+                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Phone].Select(claim => new ScopeClaim(claim)).ToList())
                 };
             }
         }
 
+        /// <summary>
+        /// Gets the "phone" scope (always include claims in token).
+        /// </summary>
+        /// <value>
+        /// The phone always include.
+        /// </value>
         public static Scope PhoneAlwaysInclude
         {
             get
@@ -137,14 +203,19 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.Phone,
-                    DisplayName = Resources.Scopes.ProfileDisplayName,
                     Type = ScopeType.Identity,
                     Emphasize = true,
-                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Phone].Select(claim => new ScopeClaim(claim, alwaysInclude: true)))
+                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Phone].Select(claim => new ScopeClaim(claim, alwaysInclude: true)).ToList())
                 };
             }
         }
 
+        /// <summary>
+        /// Gets the "address" scope.
+        /// </summary>
+        /// <value>
+        /// The address.
+        /// </value>
         public static Scope Address
         {
             get
@@ -152,14 +223,19 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.Address,
-                    DisplayName = Resources.Scopes.AddressDisplayName,
                     Type = ScopeType.Identity,
                     Emphasize = true,
-                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Address].Select(claim => new ScopeClaim(claim)))
+                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Address].Select(claim => new ScopeClaim(claim)).ToList())
                 };
             }
         }
 
+        /// <summary>
+        /// Gets the "address" scope (always include claims in token).
+        /// </summary>
+        /// <value>
+        /// The address always include.
+        /// </value>
         public static Scope AddressAlwaysInclude
         {
             get
@@ -167,14 +243,19 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.Address,
-                    DisplayName = Resources.Scopes.AddressDisplayName,
                     Type = ScopeType.Identity,
                     Emphasize = true,
-                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Address].Select(claim => new ScopeClaim(claim, alwaysInclude: true)))
+                    Claims = (Constants.ScopeToClaimsMapping[Constants.StandardScopes.Address].Select(claim => new ScopeClaim(claim, alwaysInclude: true)).ToList())
                 };
             }
         }
 
+        /// <summary>
+        /// Gets the "all_claims" scope.
+        /// </summary>
+        /// <value>
+        /// All claims.
+        /// </value>
         public static Scope AllClaims
         {
             get
@@ -182,7 +263,6 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.AllClaims,
-                    DisplayName = Resources.Scopes.AllClaimsDisplayName,
                     Type = ScopeType.Identity,
                     Emphasize = true,
                     IncludeAllClaimsForUser = true
@@ -190,6 +270,12 @@ namespace Thinktecture.IdentityServer.Core.Models
             }
         }
 
+        /// <summary>
+        /// Gets the "roles" scope.
+        /// </summary>
+        /// <value>
+        /// The roles.
+        /// </value>
         public static Scope Roles
         {
             get
@@ -197,10 +283,9 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.Roles,
-                    DisplayName = Resources.Scopes.RolesDisplayName,
                     Type = ScopeType.Identity,
                     Emphasize = true,
-                    Claims = new [] 
+                    Claims = new List<ScopeClaim> 
                     {
                         new ScopeClaim(Constants.ClaimTypes.Role)
                     }
@@ -208,6 +293,12 @@ namespace Thinktecture.IdentityServer.Core.Models
             }
         }
 
+        /// <summary>
+        /// Gets the "roles" scope (always include claims in token).
+        /// </summary>
+        /// <value>
+        /// The roles always include.
+        /// </value>
         public static Scope RolesAlwaysInclude
         {
             get
@@ -215,10 +306,9 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.Roles,
-                    DisplayName = Resources.Scopes.RolesDisplayName,
                     Type = ScopeType.Identity,
                     Emphasize = true,
-                    Claims = new[] 
+                    Claims = new List<ScopeClaim>
                     {
                         new ScopeClaim(Constants.ClaimTypes.Role, alwaysInclude: true)
                     }
@@ -226,6 +316,12 @@ namespace Thinktecture.IdentityServer.Core.Models
             }
         }
 
+        /// <summary>
+        /// Gets the "offline_access" scope.
+        /// </summary>
+        /// <value>
+        /// The offline access.
+        /// </value>
         public static Scope OfflineAccess
         {
             get
@@ -233,7 +329,6 @@ namespace Thinktecture.IdentityServer.Core.Models
                 return new Scope
                 {
                     Name = Constants.StandardScopes.OfflineAccess,
-                    DisplayName = Resources.Scopes.OfflineAccessDisplayName,
                     Type = ScopeType.Resource,
                     Emphasize = true
                 };

@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,19 @@
  * limitations under the License.
  */
 
-namespace Thinktecture.IdentityServer.Core.ViewModels
+namespace IdentityServer3.Core.ViewModels
 {
+    /// <summary>
+    /// Models the data needed to render the logout prompt page.
+    /// </summary>
     public class LogoutViewModel : CommonViewModel
     {
-        public string LogoutUrl { get; set; }
-        public AntiForgeryHiddenInputViewModel AntiForgery { get; set; }
-        public string ClientName { get; set; }
+        /// <summary>
+        /// The anti forgery values.
+        /// </summary>
+        /// <value>
+        /// The anti forgery.
+        /// </value>
+        public AntiForgeryTokenViewModel AntiForgery { get; set; }
     }
 }

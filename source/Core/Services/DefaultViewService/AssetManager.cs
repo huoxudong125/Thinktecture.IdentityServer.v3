@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,21 +14,27 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Extensions;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+namespace IdentityServer3.Core.Services.Default
 {
-    class AssetManager
+    internal class AssetManager
     {
-        public const string PageAssetsNamespace = "Thinktecture.IdentityServer.Core.Services.DefaultViewService.Assets";
-        public const string FontAssetsNamespace = PageAssetsNamespace + ".libs.bootstrap.fonts";
+        public const string HttpAssetsNamespace = "IdentityServer3.Core.Services.DefaultViewService.HttpAssets";
+        public const string FontAssetsNamespace = HttpAssetsNamespace + ".libs.bootstrap.fonts";
 
-        const string PagesPrefix = PageAssetsNamespace + ".app.";
+        public const string PageAssetsNamespace = "IdentityServer3.Core.Services.DefaultViewService.PageAssets";
+        const string PagesPrefix = PageAssetsNamespace + ".";
         const string Layout = PagesPrefix + "layout.html";
         const string FormPostResponse = PagesPrefix + "FormPostResponse.html";
+        const string CheckSession = PagesPrefix + "checksession.html";
+        const string SignoutFrame = PagesPrefix + "SignoutFrame.html";
+        const string Welcome = PagesPrefix + "welcome.html";
 
         static readonly ResourceCache cache = new ResourceCache();
 
@@ -46,7 +52,7 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         
         public static string LoadLayoutWithContent(string content)
         {
-            var layout = LoadResourceString(AssetManager.Layout);
+            var layout = LoadResourceString(Layout);
             return ApplyContentToLayout(layout, content);
         }
 
@@ -55,16 +61,51 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
             var pageContent = LoadPage(pageName);
             return LoadLayoutWithContent(pageContent);
         }
-        
-        public static string LoadFormPost(string rootUrl, string redirect_uri, string fields)
+
+        public static string LoadFormPost(string rootUrl, string redirectUri, string fields)
         {
-            return LoadResourceString(AssetManager.FormPostResponse, 
-                new{
+            return LoadResourceString(FormPostResponse,
+                new
+                {
                     rootUrl,
-                    redirect_uri,
+                    redirect_uri = redirectUri,
                     fields
                 }
             );
+        }
+
+        public static string LoadCheckSession(string rootUrl, string cookieName)
+        {
+            return LoadResourceString(CheckSession, new
+            {
+                rootUrl,
+                cookieName
+            });
+        }
+
+        public static string LoadSignoutFrame(IEnumerable<string> frameUrls)
+        {
+            string frames = null;
+            if (frameUrls != null && frameUrls.Any())
+            {
+                frameUrls = frameUrls.Select(x => String.Format("<iframe src='{0}'></iframe>", x));
+                frames = frameUrls.Aggregate((x, y) => x + Environment.NewLine + y);
+            }
+
+            return LoadResourceString(SignoutFrame, new
+            {
+                frames
+            });
+        }
+
+        internal static string LoadWelcomePage(string applicationPath, string version)
+        {
+            applicationPath = applicationPath.RemoveTrailingSlash();
+            return LoadResourceString(Welcome, new
+            {
+                applicationPath,
+                version
+            });
         }
         
         static string LoadResourceString(string name)

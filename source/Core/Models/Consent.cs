@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,35 @@
 
 using System.Collections.Generic;
 
-namespace Thinktecture.IdentityServer.Core.Models
+namespace IdentityServer3.Core.Models
 {
+    /// <summary>
+    /// Represents the permissions (in terms of scopes) granted to a client by a subject
+    /// </summary>
     public class Consent
     {
+        /// <summary>
+        /// Gets or sets the subject.
+        /// </summary>
+        /// <value>
+        /// The subject.
+        /// </value>
         public string Subject { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the client identifier.
+        /// </summary>
+        /// <value>
+        /// The client identifier.
+        /// </value>
         public string ClientId { get; set; }
+        
+        /// <summary>
+        /// Gets or sets the scopes.
+        /// </summary>
+        /// <value>
+        /// The scopes.
+        /// </value>
         public IEnumerable<string> Scopes { get; set; }
     }
 }

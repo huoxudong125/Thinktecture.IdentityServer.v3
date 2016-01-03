@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Models;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -21,39 +24,23 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web.Http;
-using Thinktecture.IdentityServer.Core.Configuration;
-using Thinktecture.IdentityServer.Core.Configuration.Hosting;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.Models;
 
-namespace Thinktecture.IdentityServer.Core.Results
+namespace IdentityServer3.Core.Results
 {
-    public class LoginResult : IHttpActionResult
+    internal class LoginResult : IHttpActionResult
     {
         private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
 
-        private readonly SignInMessage message;
         private readonly IDictionary<string, object> env;
-        private readonly IdentityServerOptions options;
+        private readonly SignInMessage message;
 
-        public static string GetRedirectUrl(SignInMessage message, IDictionary<string, object> env, IdentityServerOptions options)
+        public LoginResult(IDictionary<string, object> env, SignInMessage message)
         {
-            var result = new LoginResult(message, env, options);
-            var response = result.Execute();
-
-            return response.Headers.Location.AbsoluteUri;
-        }
-        
-        public LoginResult(SignInMessage message, IDictionary<string, object> env, IdentityServerOptions options)
-        {
-            if (message == null) throw new ArgumentNullException("message");
             if (env == null) throw new ArgumentNullException("env");
-            if (options == null) throw new ArgumentNullException("options");
+            if (message == null) throw new ArgumentNullException("message");
 
-            this.message = message;
             this.env = env;
-            this.options = options;
+            this.message = message;
         }
 
         public Task<HttpResponseMessage> ExecuteAsync(CancellationToken cancellationToken)
@@ -65,14 +52,11 @@ namespace Thinktecture.IdentityServer.Core.Results
         {
             Logger.Info("Redirecting to login page");
 
-            var cookie = new MessageCookie<SignInMessage>(this.env, this.options);
-            var id = cookie.Write(this.message);
-
-            var url = env.GetIdentityServerBaseUrl() + Constants.RoutePaths.Login;
-            var uri = new Uri(url.AddQueryString("signin=" + id));
-
             var response = new HttpResponseMessage(HttpStatusCode.Redirect);
-            response.Headers.Location = uri;
+
+            var url = this.env.CreateSignInRequest(this.message);
+            response.Headers.Location = new Uri(url);
+
             return response;
         }
     }

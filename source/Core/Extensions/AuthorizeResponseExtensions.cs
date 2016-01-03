@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,42 +13,58 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-using System.Collections.Specialized;
-using Thinktecture.IdentityServer.Core.Models;
 
-namespace Thinktecture.IdentityServer.Core.Extensions
+using IdentityServer3.Core.Models;
+using System.Collections.Specialized;
+
+namespace IdentityServer3.Core.Extensions
 {
-    public static class AuthorizeResponseExtensions
+    internal static class AuthorizeResponseExtensions
     {
         public static NameValueCollection ToNameValueCollection(this AuthorizeResponse response)
         {
             var collection = new NameValueCollection();
 
-            if (response.Code.IsPresent())
+            if (response.IsError)
             {
-                collection.Add("code", response.Code);
+                if (response.Error.IsPresent())
+                {
+                    collection.Add("error", response.Error);
+                }
             }
-
-            if (response.IdentityToken.IsPresent())
+            else
             {
-                collection.Add("id_token", response.IdentityToken);
-            }
+                if (response.Code.IsPresent())
+                {
+                    collection.Add("code", response.Code);
+                }
 
-            if (response.AccessToken.IsPresent())
-            {
-                collection.Add("access_token", response.AccessToken);
-                collection.Add("token_type", "Bearer");
-                collection.Add("expires_in", response.AccessTokenLifetime.ToString());
-            }
+                if (response.IdentityToken.IsPresent())
+                {
+                    collection.Add("id_token", response.IdentityToken);
+                }
 
-            if (response.Scope.IsPresent())
-            {
-                collection.Add("scope", response.Scope);
+                if (response.AccessToken.IsPresent())
+                {
+                    collection.Add("access_token", response.AccessToken);
+                    collection.Add("token_type", "Bearer");
+                    collection.Add("expires_in", response.AccessTokenLifetime.ToString());
+                }
+
+                if (response.Scope.IsPresent())
+                {
+                    collection.Add("scope", response.Scope);
+                }
             }
 
             if (response.State.IsPresent())
             {
                 collection.Add("state", response.State);
+            }
+            
+            if (response.SessionState.IsPresent())
+            {
+                collection.Add("session_state", response.SessionState);
             }
 
             return collection;

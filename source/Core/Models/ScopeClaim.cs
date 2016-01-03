@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-namespace Thinktecture.IdentityServer.Core.Models
+namespace IdentityServer3.Core.Models
 {
     /// <summary>
     /// Models a claim that should be emitted in a token
@@ -32,7 +32,7 @@ namespace Thinktecture.IdentityServer.Core.Models
         public string Description { get; set; }
 
         /// <summary>
-        /// Specifies whether this claim should always be present in the identity token (even if an access token has been requested as well). Applies to identity scopes only.
+        /// Specifies whether this claim should always be present in the identity token (even if an access token has been requested as well). Applies to identity scopes only. Defaults to false.
         /// </summary>
         public bool AlwaysIncludeInIdToken { get; set; }
 

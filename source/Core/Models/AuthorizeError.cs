@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 
-using System;
-using Thinktecture.IdentityServer.Core.Validation;
+using IdentityServer3.Core.Validation;
+using System.ComponentModel;
 
-namespace Thinktecture.IdentityServer.Core.Models
+#pragma warning disable 1591
+
+namespace IdentityServer3.Core.Models
 {
+    [EditorBrowsable(EditorBrowsableState.Never)]
     public class AuthorizeError
     {
         public ErrorTypes ErrorType { get; set; }
         public string Error { get; set; }
         public string ResponseMode { get; set; }
-        public Uri ErrorUri { get; set; }
+        public string ErrorUri { get; set; }
         public string State { get; set; }
     }
 }

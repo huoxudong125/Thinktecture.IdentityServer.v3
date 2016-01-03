@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,14 +15,15 @@
  */
 
 using System;
+using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
 using System.Net;
 using System.Text;
 
-namespace Thinktecture.IdentityServer.Core.Extensions
+namespace IdentityServer3.Core.Extensions
 {
-    public static class NameValueCollectionExtensions
+    internal static class NameValueCollectionExtensions
     {
         public static string ToQueryString(this NameValueCollection collection)
         {
@@ -60,10 +61,34 @@ namespace Thinktecture.IdentityServer.Core.Extensions
             foreach (string name in collection)
             {
                 var values = collection.GetValues(name);
-                builder.AppendFormat(inputFieldFormat, name, values.First());
+                var value = values.First();
+                value = Microsoft.Security.Application.Encoder.HtmlEncode(value);
+                builder.AppendFormat(inputFieldFormat, name, value);
             }
 
             return builder.ToString();
+        }
+
+
+        public static Dictionary<string, string> ToDictionary(this NameValueCollection collection)
+        {
+            var dict = new Dictionary<string, string>();
+            
+            if (collection == null || collection.Count == 0)
+            {
+                return dict;
+            }
+
+            foreach (string name in collection)
+            {
+                var value = collection.Get(name);
+                if (value != null)
+                {
+                    dict.Add(name, value);
+                }
+            }
+
+            return dict;
         }
 
         internal static string ConvertFormUrlEncodedSpacesToUrlEncodedSpaces(string str)

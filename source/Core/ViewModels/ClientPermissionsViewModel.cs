@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,16 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-using System.Collections.Generic;
-using Thinktecture.IdentityServer.Core.Models;
 
-namespace Thinktecture.IdentityServer.Core.ViewModels
+using IdentityServer3.Core.Models;
+using System.Collections.Generic;
+
+namespace IdentityServer3.Core.ViewModels
 {
+    /// <summary>
+    /// Models the data needed to render the client permissions page.
+    /// </summary>
     public class ClientPermissionsViewModel : ErrorViewModel
     {
-        public string LogoutUrl { get; set; }
+        /// <summary>
+        /// The URL to POST to revoke client permissions. <see cref="RevokeClientPermission"/> for the model for the submitted data.
+        /// </summary>
+        /// <value>
+        /// The revoke permission URL.
+        /// </value>
         public string RevokePermissionUrl { get; set; }
+
+        /// <summary>
+        /// The list of clients and their permissions for the current logged in user.
+        /// </summary>
+        /// <value>
+        /// The clients.
+        /// </value>
         public IEnumerable<ClientPermission> Clients { get; set; }
-        public AntiForgeryHiddenInputViewModel AntiForgery { get; set; }
+
+        /// <summary>
+        /// The anti forgery values.
+        /// </summary>
+        /// <value>
+        /// The anti forgery.
+        /// </value>
+        public AntiForgeryTokenViewModel AntiForgery { get; set; }
     }
 }

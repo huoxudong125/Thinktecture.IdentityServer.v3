@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,27 @@
  * limitations under the License.
  */
 
+using IdentityModel;
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Models;
+using IdentityServer3.Core.Validation;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
-using Thinktecture.IdentityModel;
-using Thinktecture.IdentityServer.Core.Validation;
 
-namespace Thinktecture.IdentityServer.Core.Services.Default
+namespace IdentityServer3.Core.Services.Default
 {
     /// <summary>
     /// Default custom token validator
     /// </summary>
     public class DefaultCustomTokenValidator : ICustomTokenValidator
     {
+        /// <summary>
+        /// The logger
+        /// </summary>
+        private static readonly ILog Logger = LogProvider.GetCurrentClassLogger();
+
         /// <summary>
         /// The user service
         /// </summary>
@@ -34,7 +43,7 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         /// <summary>
         /// The client store
         /// </summary>
-        private readonly IClientStore _clients;
+        protected readonly IClientStore _clients;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="DefaultCustomTokenValidator"/> class.
@@ -54,7 +63,7 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         /// <returns>
         /// The validation result
         /// </returns>
-        public async Task<TokenValidationResult> ValidateAccessTokenAsync(TokenValidationResult result)
+        public virtual async Task<TokenValidationResult> ValidateAccessTokenAsync(TokenValidationResult result)
         {
             if (result.IsError)
             {
@@ -65,12 +74,22 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
             var subClaim = result.Claims.FirstOrDefault(c => c.Type == Constants.ClaimTypes.Subject);
             if (subClaim != null)
             {
-                var principal = Principal.Create("tokenvalidator", subClaim);
+                var principal = Principal.Create("tokenvalidator", result.Claims.ToArray());
 
-                if (! await _users.IsActiveAsync(principal))
+                if (result.ReferenceTokenId.IsPresent())
                 {
+                    principal.Identities.First().AddClaim(new Claim(Constants.ClaimTypes.ReferenceTokenId, result.ReferenceTokenId));
+                }
+
+                var isActiveCtx = new IsActiveContext(principal, result.Client);
+                await _users.IsActiveAsync(isActiveCtx);
+                
+                if (isActiveCtx.IsActive == false)
+                {
+                    Logger.Warn("User marked as not active: " + subClaim.Value);
+
                     result.IsError = true;
-                    result.Error = Constants.ProtectedResourceErrors.ExpiredToken;
+                    result.Error = Constants.ProtectedResourceErrors.InvalidToken;
                     result.Claims = null;
 
                     return result;
@@ -84,8 +103,10 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
                 var client = await _clients.FindClientByIdAsync(clientClaim.Value);
                 if (client == null || client.Enabled == false)
                 {
+                    Logger.Warn("Client deleted or disabled: " + clientClaim.Value);
+
                     result.IsError = true;
-                    result.Error = Constants.ProtectedResourceErrors.ExpiredToken;
+                    result.Error = Constants.ProtectedResourceErrors.InvalidToken;
                     result.Claims = null;
 
                     return result;
@@ -102,18 +123,23 @@ namespace Thinktecture.IdentityServer.Core.Services.Default
         /// <returns>
         /// The validation result
         /// </returns>
-        public async Task<TokenValidationResult> ValidateIdentityTokenAsync(TokenValidationResult result)
+        public virtual async Task<TokenValidationResult> ValidateIdentityTokenAsync(TokenValidationResult result)
         {
             // make sure user is still active (if sub claim is present)
             var subClaim = result.Claims.FirstOrDefault(c => c.Type == Constants.ClaimTypes.Subject);
             if (subClaim != null)
             {
-                var principal = Principal.Create("tokenvalidator", subClaim);
+                var principal = Principal.Create("tokenvalidator", result.Claims.ToArray());
 
-                if (!await _users.IsActiveAsync(principal))
+                var isActiveCtx = new IsActiveContext(principal, result.Client);
+                await _users.IsActiveAsync(isActiveCtx);
+                
+                if (isActiveCtx.IsActive == false)
                 {
+                    Logger.Warn("User marked as not active: " + subClaim.Value);
+
                     result.IsError = true;
-                    result.Error = Constants.ProtectedResourceErrors.ExpiredToken;
+                    result.Error = Constants.ProtectedResourceErrors.InvalidToken;
                     result.Claims = null;
 
                     return result;

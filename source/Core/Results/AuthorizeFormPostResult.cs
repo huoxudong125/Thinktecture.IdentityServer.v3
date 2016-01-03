@@ -1,5 +1,5 @@
 ﻿/*
- * Copyright 2014 Dominick Baier, Brock Allen
+ * Copyright 2014, 2015 Dominick Baier, Brock Allen
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
+using IdentityServer3.Core.Extensions;
+using IdentityServer3.Core.Logging;
+using IdentityServer3.Core.Models;
+using IdentityServer3.Core.Services.Default;
 using System.Net.Http;
 using System.Threading.Tasks;
-using Thinktecture.IdentityServer.Core.Extensions;
-using Thinktecture.IdentityServer.Core.Logging;
-using Thinktecture.IdentityServer.Core.Models;
-using Thinktecture.IdentityServer.Core.Services.Default;
 
-namespace Thinktecture.IdentityServer.Core.Results
+namespace IdentityServer3.Core.Results
 {
-    public class AuthorizeFormPostResult : HtmlActionResult
+    internal class AuthorizeFormPostResult : HtmlActionResult
     {
         private readonly static ILog Logger = LogProvider.GetCurrentClassLogger();
 
@@ -41,14 +41,17 @@ namespace Thinktecture.IdentityServer.Core.Results
             var root = _request.GetIdentityServerBaseUrl();
             if (root.EndsWith("/")) root = root.Substring(0, root.Length - 1);
             var fields = _response.ToNameValueCollection().ToFormPost();
-            var redirect = _response.RedirectUri.AbsoluteUri;
+            var redirect = _response.RedirectUri;
 
             return AssetManager.LoadFormPost(root, redirect, fields);
         }
 
         public override Task<HttpResponseMessage> ExecuteAsync(System.Threading.CancellationToken cancellationToken)
         {
-            Logger.Info("Posting to " + _response.RedirectUri.AbsoluteUri);
+            _request.SetSuppressXfo();
+
+            Logger.Info("Posting to " + _response.RedirectUri);
+
             return base.ExecuteAsync(cancellationToken);
         }
     }
